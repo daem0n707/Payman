@@ -44,6 +44,7 @@ fun SidebarMenu(
     var apiKeyVisible by remember { mutableStateOf(false) }
     var groupsExpanded by remember { mutableStateOf(false) }
     var peopleExpanded by remember { mutableStateOf(false) }
+    var showUsageDialog by remember { mutableStateOf(false) }
     
     // Store which specific group is expanded
     val expandedGroupIds = remember { mutableStateListOf<String>() }
@@ -107,6 +108,12 @@ fun SidebarMenu(
         Spacer(modifier = Modifier.height(24.dp))
 
         LazyColumn(modifier = Modifier.weight(1f)) {
+            // Usage Guide Item
+            item {
+                SidebarItem(Icons.Default.HelpOutline, "Usage Guide", { showUsageDialog = true })
+                HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f), thickness = 0.5.dp, modifier = Modifier.padding(vertical = 8.dp))
+            }
+
             // Stats Item
             item {
                 SidebarItem(Icons.Default.BarChart, "Spending Stats", onSpendingStatsClick)
@@ -239,6 +246,10 @@ fun SidebarMenu(
         SidebarItem(Icons.Default.Terminal, "Logs", onLogsClick)
     }
 
+    if (showUsageDialog) {
+        UsageDialog(onDismiss = { showUsageDialog = false })
+    }
+
     if (editingPerson != null) {
         var newName by remember { mutableStateOf(editingPerson!!.name) }
         AlertDialog(
@@ -256,20 +267,84 @@ fun SidebarMenu(
     }
 
     if (editingGroup != null) {
-        var newName by remember { mutableStateOf(editingGroup!!.name) }
-        AlertDialog(
-            onDismissRequest = { editingGroup = null },
-            title = { Text("Edit Group") },
-            text = { OutlinedTextField(value = newName, onValueChange = { newName = it }, label = { Text("Group Name") }) },
-            confirmButton = {
-                Button(onClick = {
-                    onUpdateGroup(editingGroup!!.copy(name = newName))
-                    editingGroup = null
-                }) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { editingGroup = null }) { Text("Cancel") } }
+        EditGroupDialog(
+            group = editingGroup!!,
+            people = people,
+            onDismiss = { editingGroup = null },
+            onSave = { updatedGroup ->
+                onUpdateGroup(updatedGroup)
+                editingGroup = null
+            }
         )
     }
+}
+
+@Composable
+fun EditGroupDialog(
+    group: Group,
+    people: List<Person>,
+    onDismiss: () -> Unit,
+    onSave: (Group) -> Unit
+) {
+    var newName by remember { mutableStateOf(group.name) }
+    val selectedMemberIds = remember { mutableStateListOf<String>().apply { addAll(group.memberIds) } }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF36454F),
+        title = { Text("Edit Group", color = Color.White) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text("Group Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF1DB954),
+                        unfocusedBorderColor = Color.Gray
+                    )
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Members", fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 8.dp))
+                
+                Box(modifier = Modifier.height(200.dp)) {
+                    LazyColumn {
+                        items(people) { person ->
+                            val isSelected = selectedMemberIds.contains(person.id)
+                            ListItem(
+                                headlineContent = { Text(person.name, color = Color.White) },
+                                trailingContent = {
+                                    Checkbox(
+                                        checked = isSelected,
+                                        onCheckedChange = { checked ->
+                                            if (checked) selectedMemberIds.add(person.id) else selectedMemberIds.remove(person.id)
+                                        },
+                                        colors = CheckboxDefaults.colors(checkedColor = Color(0xFF1DB954))
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    if (isSelected) selectedMemberIds.remove(person.id) else selectedMemberIds.add(person.id)
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(group.copy(name = newName, memberIds = selectedMemberIds.toList())) },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DB954))
+            ) { Text("Save", color = Color.Black) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = Color.White) }
+        }
+    )
 }
 
 @Composable
