@@ -6,7 +6,7 @@ Note that I completely vibe coded this app over the weekend, I had no idea how a
 
 Since the app uses an offline OCR function and later sends the extracted text to Groq's API, rate limiting should not be a problem with the free API key thereby making the app **completely free**. 
 
-TL;DR [Jump to Setup](#-setup)
+TL;DR [Jump to Setup](https://github.com/daem0n707/Payman/blob/main/README.md#%EF%B8%8F-setup).
 
 ## ✨ Features
 
