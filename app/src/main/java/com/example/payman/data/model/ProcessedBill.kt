@@ -1,0 +1,46 @@
+package com.example.payman.data.model
+
+import android.graphics.Bitmap
+import android.net.Uri
+import java.util.*
+
+data class ProcessedBill(
+    val id: String = UUID.randomUUID().toString(),
+    val restaurantName: String,
+    var payeeName: String = "",
+    var payeeId: String? = null,
+    val items: MutableList<BillItem>,
+    var tax: Double,
+    var serviceCharge: Double,
+    var miscFees: Double,
+    var discountPercentage: Double = 0.0,
+    var discountAmount: Double = 0.0,
+    var isDiscountApplied: Boolean = false,
+    var isDiscountFixedAmount: Boolean = false,
+    var isSwiggyDineoutApplied: Boolean = false,
+    val imageUri: Uri? = null,
+    val bitmap: Bitmap? = null,
+    val participatingPersonIds: List<String> = emptyList(),
+    var isProcessing: Boolean = false,
+    var sectionName: String? = null,
+    val timestamp: Long = System.currentTimeMillis()
+) {
+    val totalAmount: Double get() {
+        val baseAmount = items.sumOf { it.totalPrice } + tax + serviceCharge
+        val discountedAmount = if (isDiscountApplied) {
+            if (isDiscountFixedAmount) {
+                baseAmount - discountAmount
+            } else {
+                baseAmount * (1 - discountPercentage / 100.0)
+            }
+        } else baseAmount
+        
+        val afterMisc = discountedAmount + miscFees
+        
+        return if (isSwiggyDineoutApplied) {
+            afterMisc * 0.90
+        } else {
+            afterMisc
+        }
+    }
+}

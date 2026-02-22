@@ -2,6 +2,8 @@
 
 **Payman** is a modern, AI-powered Android application designed to take the headache out of splitting restaurant bills and tracking group expenses. Unlike traditional splitters, Payman uses a combination of **On-Device OCR** and **LLM Intelligence** to accurately parse complex bills, handle multi-page receipts, and simplify debts across entire trips or events.
 
+Note that I completely vibe coded this app over the weekend, I had no idea how an android app works until two days ago. If the code looks janky, please do not mind.
+
 ## ✨ Features
 
 ### 🧠 Intelligent Bill Processing
@@ -17,9 +19,9 @@
 ### ⚖️ Advanced Splitting Logic
 *   **Individual Item Assignment:** Assign specific items to specific people. If multiple people share an item, the cost (and quantity) is split perfectly among them.
 *   **Payee Tracking:** Designate who paid the bill. The app automatically tracks who owes money to the payer.
-*   **Smart Split:** A powerful algorithm that simplifies debts across multiple bills. If A owes B ₹100 and B owes A ₹40, Payman simplifies it to "A owes B ₹60."
-*   **Comprehensive Discounts:** Supports both percentage and fixed-amount discounts. It even includes a dedicated toggle for the **Swiggy Dineout Card (10%)** discount.
-*   **Misc Fees:** Handles delivery fees or packaging charges separately, ensuring they aren't incorrectly discounted.
+*   **Smart Split:** A simple algorithm that simplifies debts across multiple bills. If A owes B ₹100 and B owes A ₹40, Payman simplifies it to "A owes B ₹60."
+*   **Comprehensive Discounts:** Supports both percentage and fixed-amount discounts for dineout offers from Swiggy and Zomato. It even includes a dedicated toggle inside settings for the **Swiggy Dineout Card (10%)** discount in case you own the card and would like to split the cashback recieved from it.
+*   **Misc Fees:** Handles convenience fees or dineout booking charges separately, ensuring they aren't discounted with the dineout offer.
 
 ### 👥 People & Groups
 *   **Collapsible Groups:** Create groups for your friend circles. You can expand a group in Settings to see exactly who is in it.
@@ -49,7 +51,7 @@
 
 ## 🛠️ Setup
 
-1.  Clone the repository.
+1.  Download the APK file from releases and install the app.
 2.  Obtain an API key from [Groq](https://console.groq.com/).
 3.  Open the app and navigate to **Settings** (Sidebar).
 4.  Paste your **Groq API Key** into the provided field.
