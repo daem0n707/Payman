@@ -1,8 +1,12 @@
-<img width="762" height="1600" alt="image" src="https://github.com/user-attachments/assets/c17e884e-d749-4d95-95bf-1c0ab5ae423e" /># Payman 🧾💸
+# Payman 🧾💸
 
 **Payman** is a modern, AI-powered Android application designed to take the headache out of splitting restaurant bills and tracking group expenses. Unlike traditional splitters, Payman uses a combination of **On-Device OCR** and **LLM Intelligence** to accurately parse complex bills, handle multi-page receipts, and simplify debts across entire trips or events.
 
-Note that I completely vibe coded this app over the weekend, I had no idea how an android app works until two days ago. If the code looks janky, please do not mind.
+Note that I completely vibe coded this app over the weekend, I had no idea how an android app works until two days ago. If the code looks janky, please do not mind. 
+
+Since the app uses an offline OCR function and later sends the extracted text to Groq's API, rate limiting should not be a problem with the free API key thereby making the app **completely free**. 
+
+TL;DR [Jump to Setup](https://github.com/daem0n707/Payman/blob/main/README.md#%EF%B8%8F-setup).
 
 ## ✨ Features
 
@@ -51,23 +55,26 @@ Note that I completely vibe coded this app over the weekend, I had no idea how a
 
 ## 🛠️ Setup
 
-1.  Download the APK file from releases and install the app.
-2.  Obtain an API key from [Groq](https://console.groq.com/).
+1.  Download the APK file from [releases](https://github.com/daem0n707/Payman/releases/tag/v1.0.0) and install the app.
+2.  Obtain a free API key from [Groq](https://console.groq.com/).
 3.  Open the app and navigate to **Settings** (Sidebar).
 4.  Paste your **Groq API Key** into the provided field.
 5.  Start scanning!
 
 ## 📸 Screenshots
 
-<img width="290" height="605" alt="image" src="https://github.com/user-attachments/assets/1babb97c-230b-4ea5-9398-eef9f4b7f445" />
-<img width="778" height="1600" alt="image" src="https://github.com/user-attachments/assets/91e37518-ae37-41e7-be2a-46085e1f7647" />
-<img width="778" height="1600" alt="image" src="https://github.com/user-attachments/assets/1d0b7090-5ba1-4fc9-a2c2-3e78e5b48bc9" />
-<img width="778" height="1600" alt="image" src="https://github.com/user-attachments/assets/8dfd1f8a-4b3d-43d1-a750-5330c16d3270" />
-<img width="289" height="606" alt="image" src="https://github.com/user-attachments/assets/e0157aa3-f636-4eb0-b53a-25b62f897e4e" />
-
-
-
-
+<table align="center">
+  <tr>
+    <td><img src="assets/screen1.png" width="170"/></td>
+    <td><img src="assets/screen2.jpeg" width="170"/></td>
+    <td><img src="assets/screen3.png" width="170"/></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screen4.png" width="170"/></td>
+    <td><img src="assets/screen5.png" width="170"/></td>
+    <td><img src="assets/screen6.jpeg" width="170"/></td>
+  </tr>
+</table>
 
 
 ---
