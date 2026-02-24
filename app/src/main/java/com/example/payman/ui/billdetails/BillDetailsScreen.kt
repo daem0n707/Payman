@@ -53,7 +53,7 @@ fun BillDetailsUI(
     groups: List<Group>,
     onDismiss: () -> Unit,
     onBillUpdated: (ProcessedBill) -> Unit,
-    swiggyDineoutOptionEnabled: Boolean = true
+    swiggyHdfcOptionEnabled: Boolean = true
 ) {
     if (bill == null) return
 
@@ -185,7 +185,7 @@ fun BillDetailsUI(
                         },
                         modifier = Modifier
                             .size(48.dp)
-                            .alpha(if (currentBill.isDiscountApplied || currentBill.isSwiggyDineoutApplied) 1f else 0.5f)
+                            .alpha(if (currentBill.isDiscountApplied || currentBill.isSwiggyHdfcApplied || currentBill.dinecashDeduction > 0) 1f else 0.5f)
                     ) {
                         Icon(Icons.Default.LocalOffer, contentDescription = "Discount", tint = Color.White)
                     }
@@ -212,7 +212,7 @@ fun BillDetailsUI(
 
             DetailRow("Tax", "₹${String.format(Locale.US, "%.2f", currentBill.tax)}", onClick = { editingMiscType = "Tax" })
             DetailRow("Service Charge", "₹${String.format(Locale.US, "%.2f", currentBill.serviceCharge)}", onClick = { editingMiscType = "Service Charge" })
-            DetailRow("Misc Fees", "₹${String.format(Locale.US, "%.2f", currentBill.miscFees)}", onClick = { editingMiscType = "Misc Fees" })
+            DetailRow("Misc and Booking Fees", "₹${String.format(Locale.US, "%.2f", currentBill.miscFees + currentBill.bookingFees)}", onClick = { editingMiscType = "Misc and Booking Fees" })
             
             if (currentBill.isDiscountApplied) {
                 val discountLabel = if (currentBill.isDiscountFixedAmount) {
@@ -228,13 +228,17 @@ fun BillDetailsUI(
                 DetailRow(discountLabel, "-₹${String.format(Locale.US, "%.2f", discountVal)}")
             }
             
-            if (currentBill.isSwiggyDineoutApplied) {
+            if (currentBill.dinecashDeduction > 0) {
+                DetailRow("Dinecash (Total)", "-₹${String.format(Locale.US, "%.2f", currentBill.dinecashDeduction)}")
+            }
+
+            if (currentBill.isSwiggyHdfcApplied) {
                 val base = currentBill.items.sumOf { it.totalPrice } + currentBill.tax + currentBill.serviceCharge
                 val discounted = if (currentBill.isDiscountApplied) {
                     if (currentBill.isDiscountFixedAmount) base - currentBill.discountAmount else base * (1 - currentBill.discountPercentage / 100.0)
                 } else base
-                val swiggyAmount = (discounted + currentBill.miscFees) * 0.10
-                DetailRow("Swiggy Dineout Card (10%)", "-₹${String.format(Locale.US, "%.2f", swiggyAmount)}")
+                val swiggyAmount = (discounted + currentBill.miscFees + currentBill.bookingFees - currentBill.dinecashDeduction) * 0.10
+                DetailRow("Swiggy HDFC Card (10%)", "-₹${String.format(Locale.US, "%.2f", swiggyAmount)}")
             }
         }
     }
@@ -362,45 +366,54 @@ fun BillDetailsUI(
     }
 
     if (editingMiscType != null) {
-        MiscFeeEditorDialog(
-            type = editingMiscType!!,
-            currentValue = when (editingMiscType) {
-                "Tax" -> currentBill.tax
-                "Service Charge" -> currentBill.serviceCharge
-                else -> currentBill.miscFees
-            },
-            onDismiss = { editingMiscType = null },
-            onSave = { newValue ->
-                val newHistory = history + currentBill.copy()
-                history = newHistory
-                currentBill = when (editingMiscType) {
-                    "Tax" -> currentBill.copy(tax = newValue)
-                    "Service Charge" -> currentBill.copy(serviceCharge = newValue)
-                    else -> currentBill.copy(miscFees = newValue)
+        if (editingMiscType == "Tax" || editingMiscType == "Service Charge") {
+            MiscFeeEditorDialog(
+                type = editingMiscType!!,
+                currentValue = if (editingMiscType == "Tax") currentBill.tax else currentBill.serviceCharge,
+                onDismiss = { editingMiscType = null },
+                onSave = { newValue ->
+                    val newHistory = history + currentBill.copy()
+                    history = newHistory
+                    currentBill = if (editingMiscType == "Tax") currentBill.copy(tax = newValue) else currentBill.copy(serviceCharge = newValue)
+                    onBillUpdated(currentBill)
+                    editingMiscType = null
                 }
-                onBillUpdated(currentBill)
-                editingMiscType = null
-            }
-        )
+            )
+        } else {
+            MiscAndBookingFeeEditorDialog(
+                type = editingMiscType!!,
+                currentMiscValue = currentBill.miscFees,
+                currentBookingValue = currentBill.bookingFees,
+                onDismiss = { editingMiscType = null },
+                onSave = { newMisc, newBooking ->
+                    val newHistory = history + currentBill.copy()
+                    history = newHistory
+                    currentBill = currentBill.copy(miscFees = newMisc, bookingFees = newBooking)
+                    onBillUpdated(currentBill)
+                    editingMiscType = null
+                }
+            )
+        }
     }
 
     if (showDiscountDialog) {
         DiscountEditorDialog(
             currentPercentage = currentBill.discountPercentage,
             currentAmount = currentBill.discountAmount,
+            currentDinecash = currentBill.dinecashDeduction,
             isFixed = currentBill.isDiscountFixedAmount,
-            isSwiggyDineout = currentBill.isSwiggyDineoutApplied,
+            isSwiggyHdfc = currentBill.isSwiggyHdfcApplied,
             onDismiss = { showDiscountDialog = false },
-            onSave = { value, isFixed, isSwiggy ->
+            onSave = { value, dinecash, isFixed, isSwiggyHdfc ->
                 if (isFixed) {
-                    currentBill = currentBill.copy(discountAmount = value, discountPercentage = 0.0, isDiscountFixedAmount = true, isDiscountApplied = value > 0, isSwiggyDineoutApplied = isSwiggy)
+                    currentBill = currentBill.copy(discountAmount = value, dinecashDeduction = dinecash, discountPercentage = 0.0, isDiscountFixedAmount = true, isDiscountApplied = value > 0, isSwiggyHdfcApplied = isSwiggyHdfc)
                 } else {
-                    currentBill = currentBill.copy(discountPercentage = value, discountAmount = 0.0, isDiscountFixedAmount = false, isDiscountApplied = value > 0, isSwiggyDineoutApplied = isSwiggy)
+                    currentBill = currentBill.copy(discountPercentage = value, dinecashDeduction = dinecash, discountAmount = 0.0, isDiscountFixedAmount = false, isDiscountApplied = value > 0, isSwiggyHdfcApplied = isSwiggyHdfc)
                 }
                 onBillUpdated(currentBill)
                 showDiscountDialog = false
             },
-            swiggyDineoutEnabled = swiggyDineoutOptionEnabled
+            swiggyHdfcEnabled = swiggyHdfcOptionEnabled
         )
     }
 
@@ -434,19 +447,25 @@ fun BillDetailsUI(
                     }
                     if (people.isNotEmpty()) {
                         item { Text("People", fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 8.dp)) }
-                        items(people) { person ->
-                            val isParticipating = currentBill.participatingPersonIds.contains(person.id)
-                            ListItem(
-                                headlineContent = { Text(person.name, color = Color.White) },
-                                trailingContent = { Checkbox(checked = isParticipating, onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = Color(0xFF1DB954))) },
-                                modifier = Modifier.clickable {
-                                    val newIds = currentBill.participatingPersonIds.toMutableList()
-                                    if (isParticipating) newIds.remove(person.id) else newIds.add(person.id)
-                                    currentBill = currentBill.copy(participatingPersonIds = newIds)
-                                    onBillUpdated(currentBill)
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                            )
+                        item {
+                            Box(modifier = Modifier.height(250.dp)) {
+                                LazyColumn {
+                                    items(people) { person ->
+                                        val isParticipating = currentBill.participatingPersonIds.contains(person.id)
+                                        ListItem(
+                                            headlineContent = { Text(person.name, color = Color.White) },
+                                            trailingContent = { Checkbox(checked = isParticipating, onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = Color(0xFF1DB954))) },
+                                            modifier = Modifier.clickable {
+                                                val newIds = currentBill.participatingPersonIds.toMutableList()
+                                                if (isParticipating) newIds.remove(person.id) else newIds.add(person.id)
+                                                currentBill = currentBill.copy(participatingPersonIds = newIds)
+                                                onBillUpdated(currentBill)
+                                            },
+                                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                     if (groups.isEmpty() && people.isEmpty()) {
@@ -652,25 +671,105 @@ fun MiscFeeEditorDialog(type: String, currentValue: Double, onDismiss: () -> Uni
 }
 
 @Composable
+fun MiscAndBookingFeeEditorDialog(type: String, currentMiscValue: Double, currentBookingValue: Double, onDismiss: () -> Unit, onSave: (Double, Double) -> Unit) {
+    var miscStr by remember { mutableStateOf("") }
+    var bookingStr by remember { mutableStateOf("") }
+    var runningMisc by remember { mutableStateOf(currentMiscValue) }
+    var runningBooking by remember { mutableStateOf(currentBookingValue) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF36454F),
+        title = { Text("Edit $type", color = Color.White) },
+        text = {
+            Column {
+                Text("Total Misc: ₹${String.format(Locale.US, "%.2f", runningMisc)}", color = Color.White, fontSize = 14.sp)
+                Text("Total Booking: ₹${String.format(Locale.US, "%.2f", runningBooking)}", color = Color.White, fontSize = 14.sp)
+                Text("Combined Total: ₹${String.format(Locale.US, "%.2f", runningMisc + runningBooking)}", fontWeight = FontWeight.Bold, color = Color(0xFF1DB954), modifier = Modifier.padding(vertical = 8.dp))
+                
+                OutlinedTextField(
+                    value = miscStr,
+                    onValueChange = { miscStr = it },
+                    label = { Text("Amount to add (Misc)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            runningMisc += (miscStr.toDoubleOrNull() ?: 0.0)
+                            miscStr = ""
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Misc", tint = Color(0xFF1DB954))
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = bookingStr,
+                    onValueChange = { bookingStr = it },
+                    label = { Text("Amount to add (Booking)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            runningBooking += (bookingStr.toDoubleOrNull() ?: 0.0)
+                            bookingStr = ""
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Booking", tint = Color(0xFF1DB954))
+                        }
+                    }
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val finalMisc = runningMisc + (miscStr.toDoubleOrNull() ?: 0.0)
+                val finalBooking = runningBooking + (bookingStr.toDoubleOrNull() ?: 0.0)
+                onSave(finalMisc, finalBooking)
+            }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DB954))) { Text("Save", color = Color.Black) }
+        },
+        dismissButton = {
+            TextButton(onClick = { onSave(0.0, 0.0) }, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFCF6679))) { Text("Clear All") }
+            TextButton(onClick = onDismiss) { Text("Cancel", color = Color.White) }
+        }
+    )
+}
+
+@Composable
 fun DiscountEditorDialog(
     currentPercentage: Double, 
     currentAmount: Double,
+    currentDinecash: Double,
     isFixed: Boolean,
-    isSwiggyDineout: Boolean,
+    isSwiggyHdfc: Boolean,
     onDismiss: () -> Unit, 
-    onSave: (Double, Boolean, Boolean) -> Unit,
-    swiggyDineoutEnabled: Boolean = true
+    onSave: (Double, Double, Boolean, Boolean) -> Unit,
+    swiggyHdfcEnabled: Boolean = true
 ) {
     var isFixedAmount by remember { mutableStateOf(isFixed) }
-    var swiggyDineout by remember { mutableStateOf(isSwiggyDineout) }
+    var swiggyHdfc by remember { mutableStateOf(isSwiggyHdfc) }
     var valueStr by remember { mutableStateOf(if (isFixed) (if (currentAmount > 0) currentAmount.toString() else "") else (if (currentPercentage > 0) currentPercentage.toString() else "")) }
+    var dinecashStr by remember { mutableStateOf(if (currentDinecash > 0) currentDinecash.toString() else "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF36454F),
         title = { 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Discount", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Discount & Dinecash", color = Color.White, modifier = Modifier.weight(1f))
                 IconButton(onClick = { isFixedAmount = !isFixedAmount }) {
                     Icon(Icons.Default.SyncAlt, contentDescription = "Toggle Type", tint = Color.White)
                 }
@@ -699,30 +798,58 @@ fun DiscountEditorDialog(
                     }
                 )
                 
-                if (swiggyDineoutEnabled || swiggyDineout) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = dinecashStr,
+                    onValueChange = { dinecashStr = it },
+                    label = { Text("Dinecash Deduction") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.CurrencyRupee, 
+                            contentDescription = null, 
+                            tint = Color.Gray
+                        )
+                    }
+                )
+                
+                if (swiggyHdfcEnabled || swiggyHdfc) {
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { swiggyDineout = !swiggyDineout },
+                        modifier = Modifier.fillMaxWidth().clickable { swiggyHdfc = !swiggyHdfc },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
-                            checked = swiggyDineout,
-                            onCheckedChange = { swiggyDineout = it },
+                            checked = swiggyHdfc,
+                            onCheckedChange = { swiggyHdfc = it },
                             colors = CheckboxDefaults.colors(checkedColor = Color(0xFF1DB954))
                         )
-                        Text("Swiggy Dineout Card (Extra 10%)", color = Color.White)
+                        Text("Swiggy HDFC Card (Extra 10%)", color = Color.White)
                     }
                 }
             }
         },
         confirmButton = {
             Button(onClick = {
-                onSave(valueStr.toDoubleOrNull() ?: 0.0, isFixedAmount, swiggyDineout)
+                onSave(
+                    valueStr.toDoubleOrNull() ?: 0.0,
+                    dinecashStr.toDoubleOrNull() ?: 0.0,
+                    isFixedAmount,
+                    swiggyHdfc
+                )
             }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DB954))) { Text("Save", color = Color.Black) }
         },
         dismissButton = {
-            TextButton(onClick = { onSave(0.0, false, false) }, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFCF6679))) { Text("Remove") }
+            TextButton(onClick = { onSave(0.0, 0.0, false, false) }, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFCF6679))) { Text("Remove All") }
             TextButton(onClick = onDismiss) { Text("Cancel", color = Color.White) }
         }
     )
@@ -742,12 +869,17 @@ fun SplitResultDialog(bill: ProcessedBill, people: List<Person>, onDismiss: () -
     val personShares = mutableMapOf<String, Double>()
     val dineoutOfferSavings = mutableMapOf<String, Double>()
     val swiggyCardSavings = mutableMapOf<String, Double>()
+    val dinecashSavings = mutableMapOf<String, Double>()
     val personItemDetails = mutableMapOf<String, MutableList<String>>()
+    val unassignedItems = mutableListOf<String>()
     
+    val dinecashPerPerson = if (participatingPeople.isNotEmpty()) bill.dinecashDeduction / participatingPeople.size else 0.0
+
     participatingPeople.forEach { 
         personShares[it.id] = 0.0 
         dineoutOfferSavings[it.id] = 0.0
         swiggyCardSavings[it.id] = 0.0
+        dinecashSavings[it.id] = dinecashPerPerson
         personItemDetails[it.id] = mutableListOf()
     }
 
@@ -757,22 +889,24 @@ fun SplitResultDialog(bill: ProcessedBill, people: List<Person>, onDismiss: () -
     if (itemsTotal + baseExtraFees > 0) {
         bill.items.forEach { item ->
             val itemAssignedIds = item.assignedPersonIds.filter { bill.participatingPersonIds.contains(it) }
-            val splitAmong = if (itemAssignedIds.isEmpty()) bill.participatingPersonIds else itemAssignedIds
             
-            // Fixed: Quantity corresponds to the quantity assigned to them.
-            // personQty is (total quantity of item / number of people assigned to it)
-            val personQty = item.quantity.toDouble() / splitAmong.size
-            val share = item.unitPrice * personQty
-            
-            val saving = if (bill.isDiscountApplied && !bill.isDiscountFixedAmount) {
-                share * (bill.discountPercentage / 100.0)
-            } else 0.0
-            
-            splitAmong.forEach { id ->
-                personShares[id] = (personShares[id] ?: 0.0) + share
-                dineoutOfferSavings[id] = (dineoutOfferSavings[id] ?: 0.0) + saving
-                val qtyText = if (personQty % 1.0 == 0.0) personQty.toInt().toString() else String.format(Locale.US, "%.1f", personQty)
-                personItemDetails[id]?.add("${item.name} (x$qtyText): ₹${String.format(Locale.US, "%.2f", share)}")
+            if (itemAssignedIds.isNotEmpty()) {
+                val splitAmong = itemAssignedIds
+                val personQty = item.quantity.toDouble() / splitAmong.size
+                val share = item.unitPrice * personQty
+                
+                val saving = if (bill.isDiscountApplied && !bill.isDiscountFixedAmount) {
+                    share * (bill.discountPercentage / 100.0)
+                } else 0.0
+                
+                splitAmong.forEach { id ->
+                    personShares[id] = (personShares[id] ?: 0.0) + share
+                    dineoutOfferSavings[id] = (dineoutOfferSavings[id] ?: 0.0) + saving
+                    val qtyText = if (personQty % 1.0 == 0.0) personQty.toInt().toString() else String.format(Locale.US, "%.1f", personQty)
+                    personItemDetails[id]?.add("${item.name} (x$qtyText): ₹${String.format(Locale.US, "%.2f", share)}")
+                }
+            } else {
+                unassignedItems.add(item.name)
             }
         }
         
@@ -796,31 +930,31 @@ fun SplitResultDialog(bill: ProcessedBill, people: List<Person>, onDismiss: () -
             }
         }
         
-        val miscPerPerson = bill.miscFees / participatingPeople.size
+        val miscPerPerson = (bill.miscFees + bill.bookingFees) / participatingPeople.size
         participatingPeople.forEach { person ->
             personShares[person.id] = (personShares[person.id] ?: 0.0) + miscPerPerson
             if (miscPerPerson > 0) {
-                personItemDetails[person.id]?.add("Misc: ₹${String.format(Locale.US, "%.2f", miscPerPerson)}")
+                personItemDetails[person.id]?.add("Misc and Booking: ₹${String.format(Locale.US, "%.2f", miscPerPerson)}")
             }
         }
     } else {
-        val miscShare = bill.miscFees / participatingPeople.size
+        val miscShare = (bill.miscFees + bill.bookingFees) / participatingPeople.size
         participatingPeople.forEach { person ->
             personShares[person.id] = (personShares[person.id] ?: 0.0) + miscShare
-            if (miscShare > 0) personItemDetails[person.id]?.add("Misc: ₹${String.format(Locale.US, "%.2f", miscShare)}")
+            if (miscShare > 0) personItemDetails[person.id]?.add("Misc and Booking: ₹${String.format(Locale.US, "%.2f", miscShare)}")
         }
     }
     
-    if (bill.isSwiggyDineoutApplied) {
+    if (bill.isSwiggyHdfcApplied) {
         participatingPeople.forEach { person ->
-            val subtotalAfterDineout = (personShares[person.id] ?: 0.0) - (dineoutOfferSavings[person.id] ?: 0.0)
-            val swiggySaving = subtotalAfterDineout * 0.10
+            val shareBeforeSwiggy = (personShares[person.id] ?: 0.0) - (dineoutOfferSavings[person.id] ?: 0.0) - (dinecashSavings[person.id] ?: 0.0)
+            val swiggySaving = shareBeforeSwiggy * 0.10
             swiggyCardSavings[person.id] = swiggySaving
         }
     }
 
     val finalShares = participatingPeople.associate { person ->
-        person.id to (personShares[person.id] ?: 0.0) - (dineoutOfferSavings[person.id] ?: 0.0) - (swiggyCardSavings[person.id] ?: 0.0)
+        person.id to (personShares[person.id] ?: 0.0) - (dineoutOfferSavings[person.id] ?: 0.0) - (swiggyCardSavings[person.id] ?: 0.0) - (dinecashSavings[person.id] ?: 0.0)
     }
 
     fun f(v: Double) = String.format(Locale.US, "%.2f", v)
@@ -833,12 +967,17 @@ fun SplitResultDialog(bill: ProcessedBill, people: List<Person>, onDismiss: () -
             val finalShare = finalShares[person.id] ?: 0.0
             val dSaving = dineoutOfferSavings[person.id] ?: 0.0
             val sSaving = swiggyCardSavings[person.id] ?: 0.0
+            val dcSaving = dinecashSavings[person.id] ?: 0.0
             
             append("${person.name}: ₹${f(finalShare)}\n")
             if (dSaving > 0) append("  Dineout Offer: -₹${f(dSaving)}\n")
-            if (sSaving > 0) append("  Swiggy Card Savings: -₹${f(sSaving)}\n")
+            if (sSaving > 0) append("  Swiggy HDFC Savings: -₹${f(sSaving)}\n")
+            if (dcSaving > 0) append("  Dinecash: -₹${f(dcSaving)}\n")
         }
         append("\nTotal: ₹${f(bill.totalAmount)}")
+        if (unassignedItems.isNotEmpty()) {
+            append("\n\nUnassigned Items: ${unassignedItems.joinToString(", ")}")
+        }
     }
 
     val detailedText = buildString {
@@ -851,13 +990,18 @@ fun SplitResultDialog(bill: ProcessedBill, people: List<Person>, onDismiss: () -
             
             val dSaving = dineoutOfferSavings[person.id] ?: 0.0
             val sSaving = swiggyCardSavings[person.id] ?: 0.0
+            val dcSaving = dinecashSavings[person.id] ?: 0.0
             
             if (dSaving > 0) append("Dineout Offer: -₹${f(dSaving)}\n")
-            if (sSaving > 0) append("Swiggy Card Savings: -₹${f(sSaving)}\n")
+            if (sSaving > 0) append("Swiggy HDFC Savings: -₹${f(sSaving)}\n")
+            if (dcSaving > 0) append("Dinecash: -₹${f(dcSaving)}\n")
             
             append("*Final Share: ₹${f(finalShares[person.id] ?: 0.0)}*\n\n")
         }
         append("Total: ₹${f(bill.totalAmount)}")
+        if (unassignedItems.isNotEmpty()) {
+            append("\n\nUnassigned Items: ${unassignedItems.joinToString(", ")}")
+        }
     }
 
     AlertDialog(
@@ -884,11 +1028,13 @@ fun SplitResultDialog(bill: ProcessedBill, people: List<Person>, onDismiss: () -
                     items(participatingPeople) { person ->
                         val dSaving = dineoutOfferSavings[person.id] ?: 0.0
                         val sSaving = swiggyCardSavings[person.id] ?: 0.0
+                        val dcSaving = dinecashSavings[person.id] ?: 0.0
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                             Column {
                                 Text(person.name, color = Color.White)
                                 if (dSaving > 0) Text("Dineout Offer: -₹${f(dSaving)}", color = Color(0xFF1DB954), fontSize = 11.sp)
-                                if (sSaving > 0) Text("Swiggy Card Savings: -₹${f(sSaving)}", color = Color(0xFF1DB954), fontSize = 11.sp)
+                                if (sSaving > 0) Text("Swiggy HDFC Savings: -₹${f(sSaving)}", color = Color(0xFF1DB954), fontSize = 11.sp)
+                                if (dcSaving > 0) Text("Dinecash: -₹${f(dcSaving)}", color = Color(0xFF1DB954), fontSize = 11.sp)
                             }
                             Text("₹${f(finalShares[person.id] ?: 0.0)}", fontWeight = FontWeight.Bold, color = Color.White)
                         }
@@ -897,13 +1043,15 @@ fun SplitResultDialog(bill: ProcessedBill, people: List<Person>, onDismiss: () -
                     items(participatingPeople) { person ->
                         val dSaving = dineoutOfferSavings[person.id] ?: 0.0
                         val sSaving = swiggyCardSavings[person.id] ?: 0.0
+                        val dcSaving = dinecashSavings[person.id] ?: 0.0
                         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                             Text(person.name, fontWeight = FontWeight.Bold, color = Color(0xFF1DB954))
                             personItemDetails[person.id]?.forEach { detail ->
                                 Text("• $detail", fontSize = 13.sp, color = Color.LightGray)
                             }
                             if (dSaving > 0) Text("Dineout Offer: -₹${f(dSaving)}", color = Color(0xFF1DB954), fontSize = 13.sp, modifier = Modifier.align(Alignment.End))
-                            if (sSaving > 0) Text("Swiggy Card Savings: -₹${f(sSaving)}", color = Color(0xFF1DB954), fontSize = 13.sp, modifier = Modifier.align(Alignment.End))
+                            if (sSaving > 0) Text("Swiggy HDFC Savings: -₹${f(sSaving)}", color = Color(0xFF1DB954), fontSize = 13.sp, modifier = Modifier.align(Alignment.End))
+                            if (dcSaving > 0) Text("Dinecash: -₹${f(dcSaving)}", color = Color(0xFF1DB954), fontSize = 13.sp, modifier = Modifier.align(Alignment.End))
                             Text(
                                 "Final Share: ₹${f(finalShares[person.id] ?: 0.0)}",
                                 fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White, modifier = Modifier.align(Alignment.End)
@@ -918,11 +1066,23 @@ fun SplitResultDialog(bill: ProcessedBill, people: List<Person>, onDismiss: () -
                         val label = if (bill.isDiscountFixedAmount) "Discount: ₹${bill.discountAmount}" else "Discount: ${bill.discountPercentage}%"
                         Text(label, color = Color(0xFF1DB954), fontSize = 12.sp)
                     }
-                    if (bill.isSwiggyDineoutApplied) Text("Swiggy Dineout Card: -10%", color = Color(0xFF1DB954), fontSize = 12.sp)
+                    if (bill.dinecashDeduction > 0) {
+                        Text("Dinecash: ₹${bill.dinecashDeduction}", color = Color(0xFF1DB954), fontSize = 12.sp)
+                    }
+                    if (bill.isSwiggyHdfcApplied) Text("Swiggy HDFC Card: -10%", color = Color(0xFF1DB954), fontSize = 12.sp)
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.Gray)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        val totalAssignedAmount = finalShares.values.sum()
                         Text("Total", fontWeight = FontWeight.Bold, color = Color.White)
-                        Text("₹${f(bill.totalAmount)}", fontWeight = FontWeight.Bold, color = Color(0xFF1DB954))
+                        Text("₹${f(totalAssignedAmount)}", fontWeight = FontWeight.Bold, color = Color(0xFF1DB954))
+                    }
+                    if (unassignedItems.isNotEmpty()) {
+                        Text(
+                           "Note: Sum of shares (₹${f(finalShares.values.sum())}) doesn\u0027t match bill total (₹${f(bill.totalAmount)}) because these items are unassigned: ${unassignedItems.joinToString(", ")}.",
+                            color = Color(0xFFCF6679),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
                 }
             }

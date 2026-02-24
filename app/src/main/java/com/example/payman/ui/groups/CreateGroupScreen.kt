@@ -24,18 +24,30 @@ import com.example.payman.data.model.Person
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateGroupUI(people: List<Person>, onDismiss: () -> Unit, onGroupCreated: (Group) -> Unit) {
-    var groupName by remember { mutableStateOf("") }
-    val selectedMembers = remember { mutableStateListOf<String>() }
+fun CreateGroupUI(
+    group: Group? = null,
+    people: List<Person>,
+    onDismiss: () -> Unit,
+    onGroupCreated: (Group) -> Unit
+) {
+    var groupName by remember { mutableStateOf(group?.name ?: "") }
+    val selectedMembers = remember { mutableStateListOf<String>().apply { 
+        group?.memberIds?.let { addAll(it) } 
+    } }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Create group") },
+                title = { Text(if (group == null) "Create group" else "Edit Group") },
                 navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) } },
                 actions = { 
                     TextButton(onClick = { 
-                        if (groupName.isNotBlank()) onGroupCreated(Group(name = groupName, memberIds = selectedMembers.toList())) 
+                        if (groupName.isNotBlank()) {
+                            onGroupCreated(
+                                group?.copy(name = groupName, memberIds = selectedMembers.toList()) 
+                                    ?: Group(name = groupName, memberIds = selectedMembers.toList())
+                            )
+                        }
                     }) { 
                         Text("Done", fontWeight = FontWeight.Bold) 
                     } 
@@ -50,7 +62,13 @@ fun CreateGroupUI(people: List<Person>, onDismiss: () -> Unit, onGroupCreated: (
                 onValueChange = { groupName = it },
                 label = { Text("Group Name") },
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFF1DB954), cursorColor = Color(0xFF1DB954))
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF1DB954),
+                    cursorColor = Color(0xFF1DB954),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedLabelColor = Color(0xFF1DB954)
+                )
             )
             Spacer(modifier = Modifier.height(32.dp))
             if (people.isNotEmpty()) {

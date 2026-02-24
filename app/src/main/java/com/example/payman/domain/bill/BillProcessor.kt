@@ -97,6 +97,7 @@ suspend fun processBillImage(
                 tax = json.optDouble("tax", 0.0),
                 serviceCharge = json.optDouble("serviceCharge", 0.0),
                 miscFees = json.optDouble("miscFees", 0.0),
+                bookingFees = 0.0,
                 imageUri = savedUri,
                 bitmap = null
             )

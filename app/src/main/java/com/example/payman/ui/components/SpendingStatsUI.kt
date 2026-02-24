@@ -291,11 +291,12 @@ private fun calculatePersonShareInBill(bill: ProcessedBill, personId: String): D
     
     extraPerPerson += bill.miscFees / bill.participatingPersonIds.size
     
-    val totalBeforeSwiggy = personalItemTotal + extraPerPerson
+    val totalBeforeDinecash = personalItemTotal + extraPerPerson
+    val shareAfterDinecash = totalBeforeDinecash - (bill.dinecashDeduction / bill.participatingPersonIds.size)
     
-    return if (bill.isSwiggyDineoutApplied) {
-        totalBeforeSwiggy * 0.90
+    return if (bill.isSwiggyHdfcApplied) {
+        shareAfterDinecash * 0.90
     } else {
-        totalBeforeSwiggy
+        shareAfterDinecash
     }
 }

@@ -13,16 +13,18 @@ data class ProcessedBill(
     var tax: Double,
     var serviceCharge: Double,
     var miscFees: Double,
+    var bookingFees: Double = 0.0,
     var discountPercentage: Double = 0.0,
     var discountAmount: Double = 0.0,
+    var dinecashDeduction: Double = 0.0,
     var isDiscountApplied: Boolean = false,
     var isDiscountFixedAmount: Boolean = false,
-    var isSwiggyDineoutApplied: Boolean = false,
+    var isSwiggyHdfcApplied: Boolean = false,
     val imageUri: Uri? = null,
     val bitmap: Bitmap? = null,
     val participatingPersonIds: List<String> = emptyList(),
     var isProcessing: Boolean = false,
-    var sectionName: String? = null,
+    var sectionName: String? = "General",
     val timestamp: Long = System.currentTimeMillis()
 ) {
     val totalAmount: Double get() {
@@ -35,12 +37,14 @@ data class ProcessedBill(
             }
         } else baseAmount
         
-        val afterMisc = discountedAmount + miscFees
-        
-        return if (isSwiggyDineoutApplied) {
-            afterMisc * 0.90
+        val afterMisc = discountedAmount + miscFees + bookingFees
+        // Dinecash is subtracted BEFORE applying the 10% offer
+        val beforeSwiggy = afterMisc - dinecashDeduction.coerceAtLeast(0.0)
+
+        return if (isSwiggyHdfcApplied) {
+            beforeSwiggy * 0.90
         } else {
-            afterMisc
+            beforeSwiggy
         }
     }
 }

@@ -117,11 +117,13 @@ private fun processedBillToJson(b: ProcessedBill): JSONObject {
     obj.put("tax", b.tax)
     obj.put("serviceCharge", b.serviceCharge)
     obj.put("miscFees", b.miscFees)
+    obj.put("bookingFees", b.bookingFees)
     obj.put("discountPercentage", b.discountPercentage)
     obj.put("discountAmount", b.discountAmount)
+    obj.put("dinecashDeduction", b.dinecashDeduction)
     obj.put("isDiscountApplied", b.isDiscountApplied)
     obj.put("isDiscountFixedAmount", b.isDiscountFixedAmount)
-    obj.put("isSwiggyDineoutApplied", b.isSwiggyDineoutApplied)
+    obj.put("isSwiggyHdfcApplied", b.isSwiggyHdfcApplied)
     obj.put("imageUri", b.imageUri?.toString())
     obj.put("sectionName", b.sectionName)
     obj.put("timestamp", b.timestamp)
@@ -178,11 +180,13 @@ private fun jsonToProcessedBill(obj: JSONObject): ProcessedBill {
         tax = obj.getDouble("tax"),
         serviceCharge = obj.getDouble("serviceCharge"),
         miscFees = obj.getDouble("miscFees"),
+        bookingFees = obj.optDouble("bookingFees", 0.0),
         discountPercentage = obj.optDouble("discountPercentage", 0.0),
         discountAmount = obj.optDouble("discountAmount", 0.0),
+        dinecashDeduction = obj.optDouble("dinecashDeduction", 0.0),
         isDiscountApplied = obj.optBoolean("isDiscountApplied", false),
         isDiscountFixedAmount = obj.optBoolean("isDiscountFixedAmount", false),
-        isSwiggyDineoutApplied = obj.optBoolean("isSwiggyDineoutApplied", false),
+        isSwiggyHdfcApplied = obj.optBoolean("isSwiggyHdfcApplied", obj.optBoolean("isSwiggyDineoutApplied", false)),
         imageUri = obj.optString("imageUri", null)?.let { Uri.parse(it) },
         participatingPersonIds = participating,
         sectionName = obj.optString("sectionName", null),
@@ -190,12 +194,12 @@ private fun jsonToProcessedBill(obj: JSONObject): ProcessedBill {
     )
 }
 
-fun saveSwiggyDineoutOption(context: Context, enabled: Boolean) {
-    context.getSharedPreferences("payman_prefs", Context.MODE_PRIVATE).edit().putBoolean("swiggy_dineout_option", enabled).apply()
+fun saveSwiggyHdfcOption(context: Context, enabled: Boolean) {
+    context.getSharedPreferences("payman_prefs", Context.MODE_PRIVATE).edit().putBoolean("swiggy_hdfc_option", enabled).apply()
 }
 
-fun loadSwiggyDineoutOption(context: Context): Boolean {
-    return context.getSharedPreferences("payman_prefs", Context.MODE_PRIVATE).getBoolean("swiggy_dineout_option", true)
+fun loadSwiggyHdfcOption(context: Context): Boolean {
+    return context.getSharedPreferences("payman_prefs", Context.MODE_PRIVATE).getBoolean("swiggy_hdfc_option", true)
 }
 
 

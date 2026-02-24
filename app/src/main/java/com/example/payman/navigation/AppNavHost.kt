@@ -32,13 +32,19 @@ fun AppNavHost() {
     val groups = remember { mutableStateListOf<Group>().apply { addAll(loadGroups(context)) } }
     val errorLogs = remember { mutableStateListOf<LogEntry>().apply { addAll(loadLogs(context)) } }
     val geminiLogs = remember { mutableStateListOf<LogEntry>().apply { addAll(loadGeminiLogs(context)) } }
+    
     val deletedBills = remember { mutableStateMapOf<Long, ProcessedBill>().apply { putAll(loadDeletedBills(context)) } }
-    var swiggyDineoutOptionEnabled by remember { mutableStateOf(loadSwiggyDineoutOption(context)) }
+    var swiggyDineoutOptionEnabled by remember { mutableStateOf(loadSwiggyHdfcOption(context)) }
     
     // Persist empty sections across screens
-    val emptySections = remember { mutableStateListOf<String>() }
+    val emptySections = remember { mutableStateListOf<String>().apply {
+        if (bills.none { it.sectionName == "General" }) {
+            add("General")
+        }
+    } }
 
     var selectedBill by remember { mutableStateOf<ProcessedBill?>(null) }
+    var selectedGroup by remember { mutableStateOf<Group?>(null) }
     var showCalculator by remember { mutableStateOf(false) }
     var targetSectionForNewBill by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -61,12 +67,59 @@ fun AppNavHost() {
     if (showCalculator) {
         CalculatorDialog(onDismiss = { showCalculator = false })
     }
+    
+    val deletePersonAction: (String) -> Unit = { id ->
+        people.removeIf { it.id == id }
+        savePeople(context, people)
+        
+        // Update groups to remove the person
+        groups.forEachIndexed { index, group ->
+            if (group.memberIds.contains(id)) {
+                groups[index] = group.copy(memberIds = group.memberIds.filter { it != id })
+            }
+        }
+        saveGroups(context, groups)
+        
+        // Update bills to remove the person from participating and assigned IDs
+        bills.forEachIndexed { index, bill ->
+            var billModified = false
+            val newParticipating = bill.participatingPersonIds.filter { it != id }
+            if (newParticipating.size != bill.participatingPersonIds.size) {
+                billModified = true
+            }
+            
+            val newItems = bill.items.map { item ->
+                val newAssigned = item.assignedPersonIds.filter { it != id }
+                if (newAssigned.size != item.assignedPersonIds.size) {
+                    billModified = true
+                    item.copy(assignedPersonIds = newAssigned)
+                } else item
+            }
+            
+            if (billModified) {
+                bills[index] = bill.copy(
+                    participatingPersonIds = newParticipating,
+                    items = newItems.toMutableList(),
+                    payeeId = if (bill.payeeId == id) null else bill.payeeId,
+                    payeeName = if (bill.payeeId == id) "" else bill.payeeName
+                )
+            }
+        }
+        saveBills(context, bills)
+    }
 
     when (currentScreen) {
         "home" -> BillSplitterUI(
-            onAddGroupClick = { currentScreen = "createGroup" },
+            onAddGroupClick = { 
+                selectedGroup = null
+                currentScreen = "createGroup" 
+            },
+            onEditGroupClick = { group ->
+                selectedGroup = group
+                currentScreen = "createGroup"
+            },
             onAddBillClick = { 
-                targetSectionForNewBill = null
+                targetSectionForNewBill = "General"
                 currentScreen = "addBill" 
             },
             onAddBillToSection = { sectionName ->
@@ -115,10 +168,7 @@ fun AppNavHost() {
                 if (index != -1) people[index] = updatedPerson
                 savePeople(context, people)
             },
-            onDeletePerson = { id ->
-                people.removeIf { it.id == id }
-                savePeople(context, people)
-            },
+            onDeletePerson = deletePersonAction,
             onUpdateGroup = { updatedGroup ->
                 val index = groups.indexOfFirst { it.id == updatedGroup.id }
                 if (index != -1) groups[index] = updatedGroup
@@ -131,7 +181,7 @@ fun AppNavHost() {
             swiggyDineoutEnabled = swiggyDineoutOptionEnabled,
             onSwiggyDineoutToggle = {
                 swiggyDineoutOptionEnabled = it
-                saveSwiggyDineoutOption(context, it)
+                saveSwiggyHdfcOption(context, it)
             },
             emptySections = emptySections
         )
@@ -173,10 +223,16 @@ fun AppNavHost() {
             onDismiss = { currentScreen = "home" }
         )
         "createGroup" -> CreateGroupUI(
+            group = selectedGroup,
             people = people,
             onDismiss = { currentScreen = "home" },
             onGroupCreated = { group ->
-                groups.add(group)
+                val index = groups.indexOfFirst { it.id == group.id }
+                if (index != -1) {
+                    groups[index] = group
+                } else {
+                    groups.add(group)
+                }
                 saveGroups(context, groups)
                 currentScreen = "home"
             }
@@ -184,6 +240,7 @@ fun AppNavHost() {
         "addBill" -> AddBillUI(
             apiKey = apiKey,
             onBillProcessedRequest = { bitmaps, uris ->
+                val section = targetSectionForNewBill ?: "General"
                 val tempBill = ProcessedBill(
                     restaurantName = "Processing...",
                     items = mutableListOf(),
@@ -193,7 +250,7 @@ fun AppNavHost() {
                     bitmap = bitmaps.firstOrNull(),
                     imageUri = uris.firstOrNull(),
                     isProcessing = true,
-                    sectionName = targetSectionForNewBill
+                    sectionName = section
                 )
                 bills.add(0, tempBill)
                 currentScreen = "home"
@@ -205,10 +262,11 @@ fun AppNavHost() {
                             if (index != -1) {
                                 val finalizedBill = realBill.copy(
                                     id = tempBill.id,
-                                    sectionName = targetSectionForNewBill,
+                                    sectionName = section,
                                     timestamp = System.currentTimeMillis()
                                 )
                                 bills[index] = finalizedBill
+                                saveBills(context, finalizedBill.sectionName?.let { bills.filter { b -> b.id != finalizedBill.id } + finalizedBill } ?: bills) // Simplified for saving
                                 saveBills(context, bills)
 
                                 // Refresh logs from storage since BillProcessor writes to it
@@ -244,15 +302,17 @@ fun AppNavHost() {
                 }
                 selectedBill = updatedBill
             },
-            swiggyDineoutOptionEnabled = swiggyDineoutOptionEnabled
+            swiggyHdfcOptionEnabled = swiggyDineoutOptionEnabled
         )
         "people" -> PeopleUI(
             people = people,
+            bills = bills,
             onDismiss = { currentScreen = "home" },
             onAddPerson = { name ->
                 people.add(Person(name = name))
                 savePeople(context, people)
-            }
+            },
+            onDeletePerson = deletePersonAction
         )
     }
 }

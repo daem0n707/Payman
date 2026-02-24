@@ -130,49 +130,76 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
     // Map: Payer -> (Payee -> Amount)
     val netDebts = mutableMapOf<String, MutableMap<String, Double>>()
     val detailedDebts = mutableMapOf<String, MutableMap<String, MutableList<String>>>()
+    
+    // Track unassigned items: RestaurantName -> List<ItemDescription>
+    val unassignedItems = mutableMapOf<String, MutableList<String>>()
 
     bills.forEach { bill ->
         val payeeId = bill.payeeId ?: return@forEach
         val participatingIds = bill.participatingPersonIds
         if (participatingIds.isEmpty()) return@forEach
 
-        val baseExtraFees = bill.tax + bill.serviceCharge
-        val discountMultiplier = if (bill.isDiscountApplied) (1 - bill.discountPercentage / 100.0) else 1.0
+        val discountMultiplier = if (bill.isDiscountApplied && !bill.isDiscountFixedAmount) (1 - bill.discountPercentage / 100.0) else 1.0
         
         // Calculate shares for this specific bill
         val tempShares = mutableMapOf<String, Double>()
         bill.items.forEach { item ->
             val itemAssignedIds = item.assignedPersonIds.filter { participatingIds.contains(it) }
-            val splitAmong = itemAssignedIds.ifEmpty { participatingIds }
             
-            // Fixed: Quantity corresponds to the quantity assigned to them.
-            // If explicit assignment exists, each person gets 1 unit unless the UI later supports per-person quantities.
-            // Currently, 'quantity' is total item count. If 4 people share 2 items, each gets 0.5 units.
+            if (itemAssignedIds.isEmpty()) {
+                // Unassigned item
+                val list = unassignedItems.getOrPut(bill.restaurantName) { mutableListOf() }
+                val qtyText = if (item.quantity.toDouble() % 1.0 == 0.0) item.quantity.toInt().toString() else String.format(Locale.US, "%.1f", item.quantity.toDouble())
+                list.add("${item.name} (x$qtyText) ₹${String.format(Locale.US, "%.2f", item.totalPrice)}")
+                return@forEach
+            }
+            
+            val splitAmong = itemAssignedIds
             val personalQuantity = item.quantity.toDouble() / splitAmong.size
             val share = (item.unitPrice * personalQuantity * discountMultiplier)
             
             splitAmong.forEach { id -> 
-                tempShares[id] = (tempShares[id] ?: 0.0) + share
-                
-                val detailMap = detailedDebts.getOrPut(id) { mutableMapOf() }
-                val billList = detailMap.getOrPut(payeeId) { mutableListOf() }
-                
-                val qtyText = if (personalQuantity % 1.0 == 0.0) personalQuantity.toInt().toString() else String.format(Locale.US, "%.1f", personalQuantity)
-                billList.add("${bill.restaurantName}: ${item.name} (x$qtyText) ₹${String.format(Locale.US, "%.2f", share)}")
+                if (id != payeeId) {
+                    tempShares[id] = (tempShares[id] ?: 0.0) + share
+                    
+                    val detailMap = detailedDebts.getOrPut(id) { mutableMapOf() }
+                    val billList = detailMap.getOrPut(payeeId) { mutableListOf() }
+                    
+                    val qtyText = if (personalQuantity % 1.0 == 0.0) personalQuantity.toInt().toString() else String.format(Locale.US, "%.1f", personalQuantity)
+                    billList.add("${bill.restaurantName}: ${item.name} (x$qtyText) ₹${String.format(Locale.US, "%.2f", share)}")
+                }
             }
         }
-        val extraPerPerson = ((baseExtraFees * discountMultiplier) + bill.miscFees) / participatingIds.size
+        
+        val baseExtraFees = bill.tax + bill.serviceCharge
+        var extraPerPerson = (baseExtraFees * discountMultiplier) / participatingIds.size
+        
+        if (bill.isDiscountApplied && bill.isDiscountFixedAmount) {
+            extraPerPerson -= bill.discountAmount / participatingIds.size
+        }
+        
+        extraPerPerson += bill.miscFees / participatingIds.size
+        
+        val dinecashShare = bill.dinecashDeduction / participatingIds.size
+        val shareBeforeSwiggy = extraPerPerson - dinecashShare
+        val finalExtraPerPerson = if (bill.isSwiggyHdfcApplied) shareBeforeSwiggy * 0.90 else shareBeforeSwiggy
+
         participatingIds.forEach { id -> 
-            tempShares[id] = (tempShares[id] ?: 0.0) + extraPerPerson 
-            
-            if (id != payeeId && extraPerPerson > 0) {
+            if (id != payeeId) {
+                val itemShareInThisBill = (tempShares[id] ?: 0.0)
+                val finalItemShare = if (bill.isSwiggyHdfcApplied) itemShareInThisBill * 0.90 else itemShareInThisBill
+                
+                tempShares[id] = finalItemShare + finalExtraPerPerson
+                
                 val detailMap = detailedDebts.getOrPut(id) { mutableMapOf() }
                 val billList = detailMap.getOrPut(payeeId) { mutableListOf() }
-                billList.add("${bill.restaurantName}: Fees/Tax/Disc ₹${String.format(Locale.US, "%.2f", extraPerPerson)}")
+                
+                if (finalExtraPerPerson != 0.0) {
+                    billList.add("${bill.restaurantName}: Fees/Tax/Disc/Dinecash ₹${String.format(Locale.US, "%.2f", finalExtraPerPerson)}")
+                }
             }
         }
 
-        // Update net debts
         tempShares.forEach { (payerId, amount) ->
             if (payerId != payeeId) {
                 val payerMap = netDebts.getOrPut(payerId) { mutableMapOf() }
@@ -181,9 +208,9 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
         }
     }
 
-    // Simplify debts: If A owes B 10 and B owes A 4, then A owes B 6.
+    // Simplify debts
     val simplified = mutableMapOf<String, MutableMap<String, Double>>()
-    val allPersonIds = netDebts.keys + netDebts.values.flatMap { it.keys }
+    val allPersonIds = (netDebts.keys + netDebts.values.flatMap { it.keys }).distinct()
     
     val personIdList = allPersonIds.toList()
     for (i in personIdList.indices) {
@@ -220,6 +247,13 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
                                 append("$payerName owes $payeeName: ₹${String.format(Locale.US, "%.2f", amount)}\n")
                             }
                         }
+                        if (unassignedItems.isNotEmpty()) {
+                            append("\n*Unassigned Items*\n")
+                            unassignedItems.forEach { (bill, items) ->
+                                append("$bill:\n")
+                                items.forEach { append("  - $it\n") }
+                            }
+                        }
                     }
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText("Smart Split", summaryText))
@@ -231,7 +265,7 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
         },
         text = {
             LazyColumn {
-                if (simplified.isEmpty()) {
+                if (simplified.isEmpty() && unassignedItems.isEmpty()) {
                     item { Text("No outstanding debts!", color = Color.Gray) }
                 } else {
                     simplified.forEach { (payerId, payees) ->
@@ -266,6 +300,21 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
                                         Text("Total reduction: -₹${String.format(Locale.US, "%.2f", netP2OwesP1)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFCF6679))
                                     }
                                 }
+                            }
+                        }
+                    }
+                    
+                    if (unassignedItems.isNotEmpty()) {
+                        item {
+                            HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 12.dp))
+                            Text("Unassigned Items", fontWeight = FontWeight.Bold, color = Color(0xFFCF6679))
+                        }
+                        unassignedItems.forEach { (billName, items) ->
+                            item {
+                                Text(billName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.LightGray, modifier = Modifier.padding(top = 8.dp))
+                            }
+                            items(items) { detail ->
+                                Text("• $detail", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(start = 8.dp))
                             }
                         }
                     }
