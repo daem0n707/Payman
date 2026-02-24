@@ -24,8 +24,11 @@ TL;DR [Jump to Setup](https://github.com/daem0n707/Payman/blob/main/README.md#%E
 *   **Individual Item Assignment:** Assign specific items to specific people. If multiple people share an item, the cost (and quantity) is split perfectly among them.
 *   **Payee Tracking:** Designate who paid the bill. The app automatically tracks who owes money to the payer.
 *   **Smart Split:** A simple algorithm that simplifies debts across multiple bills. If A owes B ₹100 and B owes A ₹40, Payman simplifies it to "A owes B ₹60."
-*   **Comprehensive Discounts:** Supports both percentage and fixed-amount discounts for dineout offers from Swiggy and Zomato. It even includes a dedicated toggle inside settings for the **Swiggy Dineout Card (10%)** discount in case you own the card and would like to split the cashback recieved from it.
-*   **Misc Fees:** Handles convenience fees or dineout booking charges separately, ensuring they aren't discounted with the dineout offer.
+*   **Comprehensive Discounts & Deductions:** Supports both percentage and fixed-amount discounts for dineout offers from Swiggy and Zomato. 
+    *   **Dinecash Handling:** Dinecash deductions are intelligently handled by subtracting the amount *after* the discount percentage has been applied to the subtotal, ensuring accurate final shares.
+    *   **Misc & Booking Charges:** Handles convenience fees or dineout booking charges separately. These fees are excluded from discount calculations, as they are usually flat fees that don't scale with the offer. By splitting them separately, Payman ensures these often-forgotten costs are fairly distributed.
+    *   **Swiggy HDFC Card (10%):** A dedicated toggle inside settings for users who own the card and would like to split the additional cashback/discount received from it.
+*   **Precision Splitting:** Automatically excludes unassigned items from the split totals, providing a clear warning if the sum of individual shares doesn't match the bill total.
 
 ### 👥 People & Groups
 *   **Collapsible Groups:** Create groups for your friend circles. You can expand a group in Settings to see exactly who is in it.
