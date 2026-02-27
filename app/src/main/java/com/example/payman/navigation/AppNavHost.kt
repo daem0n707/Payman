@@ -33,7 +33,7 @@ fun AppNavHost() {
     val people = remember { mutableStateListOf<Person>().apply { addAll(loadPeople(context)) } }
     val groups = remember { mutableStateListOf<Group>().apply { addAll(loadGroups(context)) } }
     val errorLogs = remember { mutableStateListOf<LogEntry>().apply { addAll(loadLogs(context)) } }
-    val geminiLogs = remember { mutableStateListOf<LogEntry>().apply { addAll(loadGeminiLogs(context)) } }
+    val groqLogs = remember { mutableStateListOf<LogEntry>().apply { addAll(loadGroqLogs(context)) } }
     
     val deletedBills = remember { mutableStateMapOf<Long, ProcessedBill>().apply { putAll(loadDeletedBills(context)) } }
     var swiggyDineoutOptionEnabled by remember { mutableStateOf(loadSwiggyHdfcOption(context)) }
@@ -211,8 +211,8 @@ fun AppNavHost() {
                         },
                         TourStep("add_people_btn", "Add People to Bill", "Add participants from your people or groups list to this specific bill.", "billDetails"),
                         TourStep("assign_payee", "Set Payee", "Select who paid the full amount. This person will be owed money by others.", "billDetails"),
-                        TourStep("discount_sec", "Apply Discounts", "Add Dineout discounts or manual deductions to reduce individual shares.", "billDetails"),
-                        TourStep("misc_charges", "Misc & Booking Fees", "Add extra charges like platform fees or delivery fees to be split.", "billDetails") {
+                        TourStep("discount_sec", "Apply Discounts", "Add Dineout discounts and Swiggy Dinecash deductions to reduce individual shares. The app also supports fixed amount discounts instead of a percentage.", "billDetails"),
+                        TourStep("misc_charges", "Misc & Booking Fees", "Add extra charges like Swiggy/Zomato convenience fees and table booking charges to be split.", "billDetails") {
                             currentScreen = "home"
                             scope.launch { drawerState.open() }
                         },
@@ -253,14 +253,14 @@ fun AppNavHost() {
             )
             "logs" -> LogsUI(
                 errorLogs = errorLogs,
-                geminiLogs = geminiLogs,
+                groqLogs = groqLogs,
                 onClearErrorLogs = {
                     errorLogs.clear()
                     saveLogs(context, errorLogs)
                 },
-                onClearGeminiLogs = {
-                    geminiLogs.clear()
-                    saveGeminiLogs(context, geminiLogs)
+                onClearGroqLogs = {
+                    groqLogs.clear()
+                    saveGroqLogs(context, groqLogs)
                 },
                 onDismiss = { currentScreen = "home" }
             )
@@ -310,9 +310,9 @@ fun AppNavHost() {
                                     bills[index] = finalizedBill
                                     saveBills(context, bills)
 
-                                    // Refresh logs from storage since BillProcessor writes to it
-                                    geminiLogs.clear()
-                                    geminiLogs.addAll(loadGeminiLogs(context))
+                                    // Refresh logs from storage
+                                    groqLogs.clear()
+                                    groqLogs.addAll(loadGroqLogs(context))
                                 }
                             },
                             onError = { msg ->

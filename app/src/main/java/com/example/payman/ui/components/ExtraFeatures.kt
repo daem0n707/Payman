@@ -383,9 +383,9 @@ fun RecycleBinUI(
 @Composable
 fun LogsUI(
     errorLogs: List<LogEntry>,
-    geminiLogs: List<LogEntry>,
+    groqLogs: List<LogEntry>,
     onClearErrorLogs: () -> Unit,
-    onClearGeminiLogs: () -> Unit,
+    onClearGroqLogs: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -399,10 +399,10 @@ fun LogsUI(
                     IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
-                    val hasLogs = if (selectedTab == 0) errorLogs.isNotEmpty() else geminiLogs.isNotEmpty()
+                    val hasLogs = if (selectedTab == 0) errorLogs.isNotEmpty() else groqLogs.isNotEmpty()
                     if (hasLogs) {
                         IconButton(onClick = {
-                            if (selectedTab == 0) onClearErrorLogs() else onClearGeminiLogs()
+                            if (selectedTab == 0) onClearErrorLogs() else onClearGroqLogs()
                         }) {
                             Icon(Icons.Default.Delete, contentDescription = "Clear Logs", tint = Color(0xFFCF6679))
                         }
@@ -436,7 +436,7 @@ fun LogsUI(
                 }
             }
 
-            val currentLogs = if (selectedTab == 0) errorLogs else geminiLogs
+            val currentLogs = if (selectedTab == 0) errorLogs else groqLogs
             
             if (currentLogs.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

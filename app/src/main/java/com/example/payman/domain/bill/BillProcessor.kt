@@ -7,9 +7,9 @@ import com.example.payman.ai.GroqClient
 import com.example.payman.ai.GroqMessage
 import com.example.payman.ai.GroqRequest
 import com.example.payman.data.local.LogEntry
-import com.example.payman.data.local.loadGeminiLogs
+import com.example.payman.data.local.loadGroqLogs
 import com.example.payman.data.local.loadLogs
-import com.example.payman.data.local.saveGeminiLogs
+import com.example.payman.data.local.saveGroqLogs
 import com.example.payman.data.local.saveLogs
 import com.example.payman.data.model.BillItem
 import com.example.payman.data.model.ProcessedBill
@@ -18,7 +18,10 @@ import com.example.payman.util.saveBitmapToInternalStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import com.google.gson.Gson
+import com.google.gson.JsonObject
+
+private val gson = Gson()
 
 suspend fun processBillImage(
     context: Context,
@@ -30,7 +33,6 @@ suspend fun processBillImage(
 ) {
     withContext(Dispatchers.IO) {
         try {
-            // 1. Perform OCR on all bitmaps
             val extractedTexts = bitmaps.map { bitmap ->
                 OcrService.recognizeText(bitmap).await().text
             }
@@ -50,69 +52,60 @@ suspend fun processBillImage(
                 }
             """.trimIndent()
 
-            val fullPrompt = "$prompt\n\n---\n$combinedBillText"
-
             val response = try {
                 GroqClient.service.getCompletion(
                     authHeader = "Bearer $apiKey",
                     request = GroqRequest(
-                        messages = listOf(GroqMessage(role = "user", content = fullPrompt))
+                        messages = listOf(GroqMessage(role = "user", content = "$prompt\n\n---\n$combinedBillText"))
                     )
                 )
             } catch (e: Exception) {
-                val currentErrorLogs = loadLogs(context).toMutableList()
-                currentErrorLogs.add(LogEntry(System.currentTimeMillis(), "Groq API Error: ${e.message}"))
-                saveLogs(context, currentErrorLogs)
+                logError(context, "Groq API Error: ${e.message}")
                 throw e
             }
 
             val rawResponse = response.choices.firstOrNull()?.message?.content ?: ""
-            
-            val currentGeminiLogs = loadGeminiLogs(context).toMutableList()
-            currentGeminiLogs.add(LogEntry(System.currentTimeMillis(), rawResponse))
-            saveGeminiLogs(context, currentGeminiLogs)
+            logGroqResponse(context, rawResponse)
 
             val cleaned = rawResponse.replace("```json", "").replace("```", "").trim()
-            val json = JSONObject(cleaned)
+            val json = gson.fromJson(cleaned, JsonObject::class.java)
 
-            val itemsList = mutableListOf<BillItem>()
-            val itemsJson = json.getJSONArray("items")
-            for (i in 0 until itemsJson.length()) {
-                val item = itemsJson.getJSONObject(i)
-                itemsList.add(
-                    BillItem(
-                        name = item.getString("name"),
-                        unitPrice = item.optDouble("unitPrice", 0.0),
-                        quantity = item.optInt("quantity", 1)
-                    )
+            val itemsList = json.getAsJsonArray("items").map {
+                val item = it.asJsonObject
+                BillItem(
+                    name = item.get("name").asString,
+                    unitPrice = item.get("unitPrice")?.asDouble ?: 0.0,
+                    quantity = item.get("quantity")?.asInt ?: 1
                 )
-            }
+            }.toMutableList()
 
-            // Save only the first bitmap for the thumbnail
-            val savedUri = if (bitmaps.isNotEmpty()) saveBitmapToInternalStorage(context, bitmaps[0]) else null
+            val savedUri = bitmaps.firstOrNull()?.let { saveBitmapToInternalStorage(context, it) }
 
             val bill = ProcessedBill(
-                restaurantName = json.optString("restaurantName", "Not available"),
+                restaurantName = json.get("restaurantName")?.asString ?: "Not available",
                 items = itemsList,
-                tax = json.optDouble("tax", 0.0),
-                serviceCharge = json.optDouble("serviceCharge", 0.0),
-                miscFees = json.optDouble("miscFees", 0.0),
+                tax = json.get("tax")?.asDouble ?: 0.0,
+                serviceCharge = json.get("serviceCharge")?.asDouble ?: 0.0,
+                miscFees = json.get("miscFees")?.asDouble ?: 0.0,
                 bookingFees = 0.0,
                 imageUri = savedUri,
                 bitmap = null
             )
             
-            withContext(Dispatchers.Main) {
-                onSuccess(bill)
-            }
+            withContext(Dispatchers.Main) { onSuccess(bill) }
         } catch (e: Exception) {
-            val currentErrorLogs = loadLogs(context).toMutableList()
-            currentErrorLogs.add(LogEntry(System.currentTimeMillis(), "Processing Error: ${e.message}"))
-            saveLogs(context, currentErrorLogs)
-            
-            withContext(Dispatchers.Main) {
-                onError("AI processing failed: ${e.message}")
-            }
+            logError(context, "Processing Error: ${e.message}")
+            withContext(Dispatchers.Main) { onError("AI processing failed: ${e.message}") }
         }
     }
+}
+
+private fun logError(context: Context, message: String) {
+    val logs = loadLogs(context).toMutableList().apply { add(LogEntry(System.currentTimeMillis(), message)) }
+    saveLogs(context, logs)
+}
+
+private fun logGroqResponse(context: Context, message: String) {
+    val logs = loadGroqLogs(context).toMutableList().apply { add(LogEntry(System.currentTimeMillis(), message)) }
+    saveGroqLogs(context, logs)
 }
