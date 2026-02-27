@@ -33,8 +33,8 @@ TL;DR [Jump to Setup](https://github.com/daem0n707/Payman#%EF%B8%8F-setup).
     *   **Economically Fair (Proportional):** Fees are distributed based on each person's food consumption. This prevents someone who only ordered a small side dish from paying the same platform/misc fees as someone who ordered an expensive main course.
     *   **Balanced (Hybrid):** A 50-50 mix of Equal and Proportional splitting, offering a middle ground for group harmony.
     
-The reason Intelligent Split Methods was introduced is that both Swiggy and Zomato charge a convenience fee on dineout bills based on the final bill amount.
-I came across a situation where, despite having a 50% discount on Swiggy, one friend ended up paying nearly 92% of their total item cost. This happened because the rest of the group had ordered significantly more, which increased the overall bill, and in turn inflated the convenience fee ultimately impacting everyone’s share.
+    The reason Intelligent Split Methods was introduced is that both Swiggy and Zomato charge a convenience fee on dineout bills based on the final bill amount.
+    I came across a situation where, despite having a 50% discount on Swiggy, one friend ended up paying nearly 92% of their total item cost. This happened because the rest of the group had ordered significantly more, which increased the overall bill, and in turn inflated the convenience fee ultimately impacting everyone’s share.
 *   **Precision Splitting:** Automatically excludes unassigned items from the split totals, providing a clear warning if the sum of individual shares doesn't match the bill total.
 
 ### 👥 People & Groups
