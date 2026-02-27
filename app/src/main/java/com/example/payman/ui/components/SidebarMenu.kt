@@ -39,7 +39,8 @@ fun SidebarMenu(
     onDeleteGroup: (String) -> Unit,
     swiggyDineoutEnabled: Boolean,
     onSwiggyDineoutToggle: (Boolean) -> Unit,
-    tourState: TourState
+    tourState: TourState,
+    onUsageClick: () -> Unit
 ) {
     var apiKeyVisible by remember { mutableStateOf(false) }
     var groupsExpanded by remember { mutableStateOf(false) }
@@ -53,13 +54,21 @@ fun SidebarMenu(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Text(
-            "Settings",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                "Settings",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            IconButton(onClick = onUsageClick) {
+                Icon(Icons.Default.HelpOutline, contentDescription = "Usage Guide", tint = Color.Gray)
+            }
+        }
 
         OutlinedTextField(
             value = apiKey,
@@ -177,7 +186,8 @@ fun SidebarMenu(
                         
                         if (isGroupExpanded) {
                             Column(modifier = Modifier.padding(start = 48.dp, bottom = 8.dp)) {
-                                val members = people.filter { group.memberIds.contains(it.id) }
+                                val memberIds = group.memberIds ?: emptyList()
+                                val members = people.filter { memberIds.contains(it.id) }
                                 if (members.isEmpty()) {
                                     Text("No members", color = Color.Gray, fontSize = 12.sp)
                                 } else {

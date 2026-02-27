@@ -2,11 +2,11 @@
 
 **Payman** is a modern, AI-powered Android application designed to take the headache out of splitting restaurant bills and tracking group expenses. Unlike traditional splitters, Payman uses a combination of **On-Device OCR** and **LLM Intelligence** to accurately parse complex bills, handle multi-page receipts, and simplify debts across entire trips or events.
 
-Note that I completely vibe coded this app over the weekend, I had no idea how an android app works until two days ago. If the code looks janky, please do not mind. 
+Note that I completely vibe coded this app over the weekend, I had no idea how an android app works until now. If the code looks janky, please do not mind. 
 
 Since the app uses an offline OCR function and later sends the extracted text to Groq's API, rate limiting should not be a problem with the free API key thereby making the app **completely free**. 
 
-TL;DR [Jump to Setup](https://github.com/daem0n707/Payman/blob/main/README.md#%EF%B8%8F-setup).
+TL;DR [Jump to Setup](https://github.com/daem0n707/Payman#%EF%B8%8F-setup).
 
 ## ✨ Features
 
@@ -23,11 +23,15 @@ TL;DR [Jump to Setup](https://github.com/daem0n707/Payman/blob/main/README.md#%E
 ### ⚖️ Advanced Splitting Logic
 *   **Individual Item Assignment:** Assign specific items to specific people. If multiple people share an item, the cost (and quantity) is split perfectly among them.
 *   **Payee Tracking:** Designate who paid the bill. The app automatically tracks who owes money to the payer.
-*   **Smart Split:** A simple algorithm that simplifies debts across multiple bills. If A owes B ₹100 and B owes A ₹40, Payman simplifies it to "A owes B ₹60."
+*   **Smart Split:** A simple logic that simplifies debts across multiple bills. If A owes B ₹100 and B owes A ₹40, Payman simplifies it to "A owes B ₹60."
 *   **Comprehensive Discounts & Deductions:** Supports both percentage and fixed-amount discounts for dineout offers from Swiggy and Zomato. 
     *   **Dinecash Handling:** Dinecash deductions are intelligently handled by subtracting the amount *after* the discount percentage has been applied to the subtotal, ensuring accurate final shares.
     *   **Misc & Booking Charges:** Handles convenience fees or dineout booking charges separately. These fees are excluded from discount calculations, as they are usually flat fees that don't scale with the offer. By splitting them separately, Payman ensures these often-forgotten costs are fairly distributed.
     *   **Swiggy HDFC Card (10%):** A dedicated toggle inside settings for users who own the card and would like to split the additional cashback/discount received from it.
+*   **Intelligent Split Methods:** Choose how to distribute non-item costs (Misc Fees, Booking Fees) for maximum fairness:
+    *   **Equal:** Every participant pays an equal share of the additional fees.
+    *   **Economically Fair (Proportional):** Fees are distributed based on each person's food consumption. This prevents someone who only ordered a small side dish from paying the same platform/misc fees as someone who ordered an expensive main course.
+    *   **Balanced (Hybrid):** A 50-50 mix of Equal and Proportional splitting, offering a middle ground for group harmony.
 *   **Precision Splitting:** Automatically excludes unassigned items from the split totals, providing a clear warning if the sum of individual shares doesn't match the bill total.
 
 ### 👥 People & Groups
@@ -41,8 +45,8 @@ TL;DR [Jump to Setup](https://github.com/daem0n707/Payman/blob/main/README.md#%E
 
 ### 🛠️ Utilities
 *   **In-App Calculator:** A handy dark-themed calculator for quick math.
-*   **Detailed Logs:** View AI responses and error logs to troubleshoot any processing issues.
-*   **Usage Guide:** A built-in guide explaining the nuances of the splitting logic and the app's features.
+*   **Detailed Logs:** View AI responses and error logs to troubleshoot any processing issues. **Payman now supports separate logs for general errors and Groq API responses.**
+*   **Usage and Tour Guide:** A built-in guide explaining the nuances of the splitting logic and the app's features.
 
 ## 🚀 Tech Stack
 
@@ -54,7 +58,7 @@ TL;DR [Jump to Setup](https://github.com/daem0n707/Payman/blob/main/README.md#%E
     *   Google ML Kit (Text Recognition)
     *   Groq API (Generative AI for JSON Extraction)
 *   **Image Loading:** Coil
-*   **Local Storage:** SharedPreferences (with JSON serialization)
+*   **Local Storage:** SharedPreferences (with JSON serialization using Gson)
 
 ## 🛠️ Setup
 

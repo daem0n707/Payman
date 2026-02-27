@@ -158,7 +158,8 @@ fun BillSplitterUI(
                             onDeleteGroup = onDeleteGroup,
                             swiggyDineoutEnabled = swiggyDineoutEnabled,
                             onSwiggyDineoutToggle = onSwiggyDineoutToggle,
-                            tourState = tourState
+                            tourState = tourState,
+                            onUsageClick = { showUsageDialog = true }
                         )
                     }
                 }
@@ -179,9 +180,6 @@ fun BillSplitterUI(
                                     IconButton(onClick = onStartTour) {
                                         Icon(Icons.Default.Explore, contentDescription = "Start Tour", tint = Color(0xFF1DB954))
                                     }
-                                }
-                                IconButton(onClick = { showUsageDialog = true }) {
-                                    Icon(Icons.Default.HelpOutline, contentDescription = "Usage Guide")
                                 }
                                 IconButton(
                                     onClick = { showNewSectionDialog = true },

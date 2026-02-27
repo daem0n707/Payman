@@ -75,6 +75,8 @@ fun SplitResultDialog(
     val calculationData = remember(bill, participatingPeople) {
         val foodTotals = mutableMapOf<String, Double>()
         val itemDetails = mutableMapOf<String, MutableList<String>>()
+        val unassignedItemsList = mutableListOf<String>()
+
         participatingPeople.forEach { 
             foodTotals[it.id] = 0.0 
             itemDetails[it.id] = mutableListOf()
@@ -90,6 +92,9 @@ fun SplitResultDialog(
                     val qtyText = if (perPersonQty % 1.0 == 0.0) perPersonQty.toInt().toString() else String.format(Locale.US, "%.1f", perPersonQty)
                     itemDetails[id]?.add("${item.name} (x$qtyText): ₹${String.format(Locale.US, "%.2f", share)}")
                 }
+            } else {
+                val qtyText = if (item.quantity.toDouble() % 1.0 == 0.0) item.quantity.toInt().toString() else String.format(Locale.US, "%.1f", item.quantity.toDouble())
+                unassignedItemsList.add("${item.name} (x$qtyText): ₹${String.format(Locale.US, "%.2f", item.totalPrice)}")
             }
         }
         
@@ -105,6 +110,7 @@ fun SplitResultDialog(
         object {
             val foodShares = foodTotals
             val personItemDetails = itemDetails
+            val unassignedItems = unassignedItemsList
             val totalMisc = totalMisc
             val totalFood = totalFood
             val personCount = personCount
@@ -141,6 +147,7 @@ fun SplitResultDialog(
                     isDetailedView = isDetailedView,
                     foodShares = calculationData.foodShares,
                     personItemDetails = calculationData.personItemDetails,
+                    unassignedItems = calculationData.unassignedItems,
                     maxSaving = calculationData.maxSaving,
                     onDetailedViewToggle = { isDetailedView = !isDetailedView },
                     onFlip = { isFlipped = true },
@@ -183,6 +190,7 @@ fun SplitSummaryContent(
     isDetailedView: Boolean,
     foodShares: Map<String, Double>,
     personItemDetails: Map<String, List<String>>,
+    unassignedItems: List<String>,
     maxSaving: Double,
     onDetailedViewToggle: () -> Unit,
     onFlip: () -> Unit,
@@ -271,6 +279,13 @@ fun SplitSummaryContent(
                         }
                         append("\n")
                     }
+                    
+                    if (unassignedItems.isNotEmpty()) {
+                        append("*Unassigned Items*:\n")
+                        unassignedItems.forEach { append("  • $it\n") }
+                        append("\n")
+                    }
+                    
                     append("*Total*: ₹${String.format(Locale.US, "%.2f", bill.totalAmount)}")
                     
                     if (currentMethod != SplitMethod.EQUAL) {
@@ -315,6 +330,23 @@ fun SplitSummaryContent(
                         }
                         HorizontalDivider(modifier = Modifier.padding(top = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
                     }
+                }
+            }
+            
+            if (unassignedItems.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Unassigned Items", color = Color(0xFFCF6679), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    unassignedItems.forEach { detail ->
+                        Text("• $detail", color = Color(0xFFCF6679), fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp, top = 2.dp))
+                    }
+                    Text(
+                        "Warning: These items are not assigned to anyone and are excluded from the individual shares.",
+                        color = Color(0xFFCF6679),
+                        fontSize = 11.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
             
