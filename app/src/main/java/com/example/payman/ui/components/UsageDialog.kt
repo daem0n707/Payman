@@ -20,12 +20,11 @@ fun UsageDialog(onDismiss: () -> Unit) {
         text = {
             LazyColumn {
                 item {
-                    UsageSection("Payee Selection", "Click on the Restaurant Name in the Bill Details screen to select a Payee. The Payee is the person who initially paid the bill. Other participants will owe their shares to this person.")
-                    UsageSection("Smart Split", "The 'AutoAwesome' icon in each section header performs a Smart Split across all bills in that section. It simplifies debts (e.g., if A owes B ₹10 and B owes A ₹4, A simply owes B ₹6) and tracks who owes what based on the designated Payees.")
+                    UsageSection("Payee Selection", "Click on the Restaurant Name in the Bill Details screen to select a Payee. The Payee is the person who initially paid the bill. Other participants will owe their shares to this person. The Payee name shows up in the final bill split text that is copied.")
+                    UsageSection("Smart Split", "This option in each section header performs a Smart Split across all bills in that section. It simplifies debts (e.g., if A owes B ₹10 and B owes A ₹4, A simply owes B ₹6) and tracks who owes what based on the designated Payees.")
                     UsageSection("Lengthy Bills", "For long receipts that don't fit in one photo, you can capture multiple images. The app will merge the text and use AI to de-duplicate any overlapping items.")
-                    UsageSection("People & Groups", "Add people individually or create groups in Settings. You can quickly add all members of a group to a bill by selecting the group in the 'Add People' dialog.")
                     UsageSection("How Split Works", "By default, items are split among all participating people. You can assign specific people to an item to split only that item's cost (and quantity) among them.")
-                    UsageSection("Discounts & Dinecash", "Discounts (Fixed or Percentage) are applied to the subtotal of items, taxes, and service charges. Dinecash is a total fixed amount deducted from the bill total and is split equally among all participating people. Note: Dinecash is subtracted BEFORE the Swiggy HDFC 10% offer is applied.")
+                    UsageSection("Discounts & Dinecash", "Discounts (Fixed or Percentage) are applied to the subtotal of items, taxes, and service charges. Dinecash is a total fixed amount deducted from the bill total and is split equally among all participating people. Note: Dinecash is subtracted BEFORE the Swiggy HDFC Card 10% cashback is applied in case this is toggled ON.")
                     UsageSection("Misc and Booking Fees", "Misc Fees and Booking Fees are added to the final total. They are split equally among all participating people. Booking fees are intended for platform or convenience charges added manually by you.")
                     UsageSection("Recycle Bin", "Deleted bills are moved to the Recycle Bin and can be restored. They are permanently deleted after 30 days.")
                 }

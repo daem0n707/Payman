@@ -38,7 +38,8 @@ fun SidebarMenu(
     onUpdateGroup: (Group) -> Unit,
     onDeleteGroup: (String) -> Unit,
     swiggyDineoutEnabled: Boolean,
-    onSwiggyDineoutToggle: (Boolean) -> Unit
+    onSwiggyDineoutToggle: (Boolean) -> Unit,
+    tourState: TourState
 ) {
     var apiKeyVisible by remember { mutableStateOf(false) }
     var groupsExpanded by remember { mutableStateOf(false) }
@@ -64,7 +65,7 @@ fun SidebarMenu(
             value = apiKey,
             onValueChange = onApiKeyChange,
             label = { Text("Groq API Key") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().tourTarget(tourState, "api_key"),
             visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
                 IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
@@ -86,7 +87,10 @@ fun SidebarMenu(
         Spacer(modifier = Modifier.height(16.dp))
         
         Row(
-            modifier = Modifier.fillMaxWidth().clickable { onSwiggyDineoutToggle(!swiggyDineoutEnabled) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .tourTarget(tourState, "swiggy_hdfc")
+                .clickable { onSwiggyDineoutToggle(!swiggyDineoutEnabled) },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -108,7 +112,12 @@ fun SidebarMenu(
         LazyColumn(modifier = Modifier.weight(1f)) {
             // Stats Item
             item {
-                SidebarItem(Icons.Default.BarChart, "Spending Stats", onSpendingStatsClick)
+                SidebarItem(
+                    icon = Icons.Default.BarChart, 
+                    label = "Spending Stats", 
+                    onClick = onSpendingStatsClick,
+                    modifier = Modifier.tourTarget(tourState, "stats_btn")
+                )
                 HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f), thickness = 0.5.dp, modifier = Modifier.padding(vertical = 8.dp))
             }
 
@@ -117,6 +126,7 @@ fun SidebarMenu(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .tourTarget(tourState, "groups_sec")
                         .clickable { groupsExpanded = !groupsExpanded }
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -188,6 +198,7 @@ fun SidebarMenu(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .tourTarget(tourState, "people_sec")
                         .clickable { peopleExpanded = !peopleExpanded }
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -222,22 +233,27 @@ fun SidebarMenu(
         Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider(color = Color.Gray, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 8.dp))
 
-        SidebarMenuFooter(onCalculatorClick, onRecycleBinClick, onLogsClick)
+        SidebarMenuFooter(onCalculatorClick, onRecycleBinClick, onLogsClick, tourState)
     }
 }
 
 @Composable
-fun SidebarMenuFooter(onCalculatorClick: () -> Unit, onRecycleBinClick: () -> Unit, onLogsClick: () -> Unit) {
+fun SidebarMenuFooter(onCalculatorClick: () -> Unit, onRecycleBinClick: () -> Unit, onLogsClick: () -> Unit, tourState: TourState) {
     SidebarItem(Icons.Default.Calculate, "Calculator", onCalculatorClick)
-    SidebarItem(Icons.Default.DeleteSweep, "Recycle Bin", onRecycleBinClick)
+    SidebarItem(Icons.Default.DeleteSweep, "Recycle Bin", onRecycleBinClick, modifier = Modifier.tourTarget(tourState, "recycle_bin_btn"))
     SidebarItem(Icons.Default.Terminal, "Logs", onLogsClick)
 }
 
 @Composable
-fun SidebarItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+fun SidebarItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector, 
+    label: String, 
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp)

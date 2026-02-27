@@ -202,6 +202,14 @@ fun loadSwiggyHdfcOption(context: Context): Boolean {
     return context.getSharedPreferences("payman_prefs", Context.MODE_PRIVATE).getBoolean("swiggy_hdfc_option", true)
 }
 
+fun saveTourCompleted(context: Context, completed: Boolean) {
+    context.getSharedPreferences("payman_prefs", Context.MODE_PRIVATE).edit().putBoolean("tour_completed", completed).apply()
+}
+
+fun loadTourCompleted(context: Context): Boolean {
+    return context.getSharedPreferences("payman_prefs", Context.MODE_PRIVATE).getBoolean("tour_completed", false)
+}
+
 
 data class LogEntry(val timestamp: Long, val message: String)
 

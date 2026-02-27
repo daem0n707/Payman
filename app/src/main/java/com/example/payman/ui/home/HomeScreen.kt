@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -34,10 +36,7 @@ import com.example.payman.data.local.saveBills
 import com.example.payman.data.model.Group
 import com.example.payman.data.model.Person
 import com.example.payman.data.model.ProcessedBill
-import com.example.payman.ui.components.SidebarMenu
-import com.example.payman.ui.components.SquareButton
-import com.example.payman.ui.components.SmartSplitDialog
-import com.example.payman.ui.components.UsageDialog
+import com.example.payman.ui.components.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Collections
@@ -68,9 +67,11 @@ fun BillSplitterUI(
     onDeleteGroup: (String) -> Unit,
     swiggyDineoutEnabled: Boolean,
     onSwiggyDineoutToggle: (Boolean) -> Unit,
-    emptySections: SnapshotStateList<String>
+    emptySections: SnapshotStateList<String>,
+    tourState: TourState,
+    onStartTour: () -> Unit,
+    drawerState: DrawerState = rememberDrawerState(DrawerValue.Closed)
 ) {
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var selectedBillsForSmartSplit by remember { mutableStateOf<List<ProcessedBill>?>(null) }
     var showNewSectionDialog by remember { mutableStateOf(false) }
@@ -156,7 +157,8 @@ fun BillSplitterUI(
                             onUpdateGroup = onUpdateGroup,
                             onDeleteGroup = onDeleteGroup,
                             swiggyDineoutEnabled = swiggyDineoutEnabled,
-                            onSwiggyDineoutToggle = onSwiggyDineoutToggle
+                            onSwiggyDineoutToggle = onSwiggyDineoutToggle,
+                            tourState = tourState
                         )
                     }
                 }
@@ -173,13 +175,24 @@ fun BillSplitterUI(
                                 actionIconContentColor = Color.White
                             ),
                             actions = {
+                                if (bills.isNotEmpty()) {
+                                    IconButton(onClick = onStartTour) {
+                                        Icon(Icons.Default.Explore, contentDescription = "Start Tour", tint = Color(0xFF1DB954))
+                                    }
+                                }
                                 IconButton(onClick = { showUsageDialog = true }) {
                                     Icon(Icons.Default.HelpOutline, contentDescription = "Usage Guide")
                                 }
-                                IconButton(onClick = { showNewSectionDialog = true }) {
+                                IconButton(
+                                    onClick = { showNewSectionDialog = true },
+                                    modifier = Modifier.tourTarget(tourState, "new_section_btn")
+                                ) {
                                     Icon(Icons.Default.CreateNewFolder, contentDescription = "New Section")
                                 }
-                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                IconButton(
+                                    onClick = { scope.launch { drawerState.open() } },
+                                    modifier = Modifier.tourTarget(tourState, "menu_btn")
+                                ) {
                                     Icon(Icons.Default.Menu, contentDescription = "Menu")
                                 }
                             }
@@ -194,7 +207,9 @@ fun BillSplitterUI(
                     ) {
                         if (bills.isEmpty() && emptySections.isEmpty()) {
                             Column(
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 32.dp),
                                 verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
@@ -204,6 +219,13 @@ fun BillSplitterUI(
                                     onClick = onAddBillClick
                                 )
                                 Spacer(modifier = Modifier.height(24.dp))
+                                Text(
+                                    text = "Add your first bill to get a tour across the features of the app!",
+                                    color = Color.LightGray,
+                                    fontSize = 14.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
                                 TextButton(onClick = { showNewSectionDialog = true }) {
                                     Icon(Icons.Default.CreateNewFolder, null, tint = Color(0xFF1DB954))
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -302,10 +324,6 @@ fun BillSplitterUI(
                                     },
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                item {
-                                    Text("Recent Bills", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(vertical = 16.dp))
-                                }
-
                                 allSectionNames.forEach { sectionName ->
                                     val sectionBills = bills.filter { it.sectionName == sectionName }
                                     val isCollapsed = collapsedSections.contains(sectionName)
@@ -331,7 +349,8 @@ fun BillSplitterUI(
                                                     emptySections.remove(sectionName)
                                                 },
                                                 hasBills = sectionBills.isNotEmpty(),
-                                                isHovered = isHovered
+                                                isHovered = isHovered,
+                                                tourState = tourState
                                             )
                                         }
                                     }
@@ -354,13 +373,15 @@ fun BillSplitterUI(
                                                 }
                                             }
                                         } else {
-                                            itemsIndexed(sectionBills, key = { _, bill -> "bill_${bill.id}" }) { _, bill ->
+                                            itemsIndexed(sectionBills, key = { _, bill -> "bill_${bill.id}" }) { index, bill ->
                                                 val isDragged = draggedBill?.id == bill.id
-                                                
+                                                val isFirstBillInFirstSection = index == 0 && sectionName == allSectionNames.firstOrNull()
+
                                                 BillRow(
                                                     bill = bill,
                                                     modifier = Modifier
                                                         .animateItem()
+                                                        .then(if (isFirstBillInFirstSection) Modifier.tourTarget(tourState, "first_bill") else Modifier)
                                                         .graphicsLayer {
                                                             if (isDragged) {
                                                                 scaleX = 1.1f
@@ -486,7 +507,8 @@ fun SectionHeader(
     onAddBill: () -> Unit,
     onDeleteSection: () -> Unit,
     hasBills: Boolean,
-    isHovered: Boolean = false
+    isHovered: Boolean = false,
+    tourState: TourState
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -512,12 +534,18 @@ fun SectionHeader(
         )
         
         if (hasBills) {
-            IconButton(onClick = onSmartSplit) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = "Smart Split", tint = Color(0xFF1DB954))
+            IconButton(
+                onClick = onSmartSplit,
+                modifier = Modifier.tourTarget(tourState, "smart_split")
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = "Smart Split", tint = Color(0xFF1DB954))
             }
         }
         
-        IconButton(onClick = onAddBill) {
+        IconButton(
+            onClick = onAddBill,
+            modifier = Modifier.tourTarget(tourState, "add_bill_to_section")
+        ) {
             Icon(Icons.Default.Add, contentDescription = "Add Bill to Section", tint = Color.White)
         }
         

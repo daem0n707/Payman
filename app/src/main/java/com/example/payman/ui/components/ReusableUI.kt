@@ -73,9 +73,9 @@ fun SquareButton(icon: ImageVector, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun DetailRow(label: String, value: String, onClick: () -> Unit = {}) {
+fun DetailRow(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
             .clip(RoundedCornerShape(8.dp))

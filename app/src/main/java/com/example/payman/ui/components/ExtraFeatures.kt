@@ -432,7 +432,7 @@ fun LogsUI(
                     Text("Error Logs", modifier = Modifier.padding(16.dp), color = if (selectedTab == 0) Color(0xFF1DB954) else Color.White)
                 }
                 Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
-                    Text("Gemini Responses", modifier = Modifier.padding(16.dp), color = if (selectedTab == 1) Color(0xFF1DB954) else Color.White)
+                    Text("Groq Responses", modifier = Modifier.padding(16.dp), color = if (selectedTab == 1) Color(0xFF1DB954) else Color.White)
                 }
             }
 
