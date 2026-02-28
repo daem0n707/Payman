@@ -65,7 +65,7 @@ TL;DR [Jump to Setup](https://github.com/daem0n707/Payman#%EF%B8%8F-setup).
 
 ## 🛠️ Setup
 
-1.  Download the APK file from [releases](https://github.com/daem0n707/Payman/releases/tag/v1.0.0) and install the app.
+1.  Download the APK file from [releases](https://github.com/daem0n707/Payman/releases) and install the app.
 2.  Obtain a free API key from [Groq](https://console.groq.com/).
 3.  Open the app and navigate to **Settings** (Sidebar).
 4.  Paste your **Groq API Key** into the provided field.
@@ -89,3 +89,6 @@ TL;DR [Jump to Setup](https://github.com/daem0n707/Payman#%EF%B8%8F-setup).
 
 ---
 *Built with ❤️ for people who are tired of manual bill calculations.*
+
+---
+**Tags:** `swiggy`, `zomato`, `dineout`, `free bill split app android`, `dineout bill split app`, `restaurant bill splitter`, `AI bill scanner`, `receipt parser`, `group expense tracker`, `bill splitter with ocr`, `swiggy hdfc card offers`, `smart split algorithm`.
