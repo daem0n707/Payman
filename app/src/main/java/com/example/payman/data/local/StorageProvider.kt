@@ -115,6 +115,21 @@ fun loadSwiggyHdfcOption(context: Context): Boolean {
     return context.getSharedPreferences("payman_prefs", Context.MODE_PRIVATE).getBoolean("swiggy_hdfc_option", true)
 }
 
+fun saveSectionOrder(context: Context, sections: List<String>) {
+    val json = gson.toJson(sections)
+    context.getSharedPreferences("payman_prefs", Context.MODE_PRIVATE).edit().putString("section_order", json).apply()
+}
+
+fun loadSectionOrder(context: Context): List<String> {
+    val json = context.getSharedPreferences("payman_prefs", Context.MODE_PRIVATE).getString("section_order", "[]") ?: "[]"
+    return try {
+        val type = object : TypeToken<List<String>>() {}.type
+        gson.fromJson(json, type) ?: emptyList()
+    } catch (e: Exception) {
+        emptyList()
+    }
+}
+
 data class LogEntry(val timestamp: Long, val message: String)
 
 fun saveLogs(context: Context, logs: List<LogEntry>) {

@@ -25,9 +25,12 @@ data class ProcessedBill(
     val participatingPersonIds: List<String> = emptyList(),
     var isProcessing: Boolean = false,
     var sectionName: String? = "General",
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val isManualExpense: Boolean = false
 ) {
     val totalAmount: Double get() {
+        if (isManualExpense) return items.sumOf { it.totalPrice }
+
         val baseAmount = items.sumOf { it.totalPrice } + tax + serviceCharge
         val discountedAmount = if (isDiscountApplied) {
             if (isDiscountFixedAmount) {

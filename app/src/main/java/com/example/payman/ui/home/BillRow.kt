@@ -1,5 +1,6 @@
 package com.example.payman.ui.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,44 +31,77 @@ fun BillRow(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B373E)) // Blends with #36454F
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = if (bill.isManualExpense) Color(0xFF232D34) else Color(0xFF2B373E)
+        ),
+        border = if (bill.isManualExpense) BorderStroke(1.dp, Color(0xFF1DB954).copy(alpha = 0.3f)) else null
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.size(60.dp)) {
-                if (bill.imageUri != null) {
-                    AsyncImage(
-                        model = bill.imageUri,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                } else if (bill.bitmap != null) {
-                    Image(
-                        bitmap = bill.bitmap.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
-                    )
+                if (bill.isManualExpense) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF1DB954).copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Description, 
+                            contentDescription = null, 
+                            tint = Color(0xFF1DB954), 
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 } else {
-                    Box(modifier = Modifier.fillMaxSize().background(Color.Gray, RoundedCornerShape(8.dp)))
+                    if (bill.imageUri != null) {
+                        AsyncImage(
+                            model = bill.imageUri,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else if (bill.bitmap != null) {
+                        Image(
+                            bitmap = bill.bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize().background(Color.Gray, RoundedCornerShape(8.dp)))
+                    }
                 }
                 
                 if (bill.isProcessing) {
-                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp)), 
+                        contentAlignment = Alignment.Center
+                    ) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF1DB954), strokeWidth = 2.dp)
                     }
                 }
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(bill.restaurantName, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(
+                    text = bill.restaurantName, 
+                    fontSize = 18.sp, 
+                    fontWeight = FontWeight.Bold, 
+                    color = Color.White
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (!bill.isProcessing) {
-                        Text("${bill.items.size} items", fontSize = 14.sp, color = Color.Gray)
+                        val participantCount = if (bill.isManualExpense) bill.participatingPersonIds.size else bill.items.size
+                        val unit = if (bill.isManualExpense) "people" else "items"
+                        Text("$participantCount $unit", fontSize = 14.sp, color = Color.Gray)
                         if (bill.payeeName.isNotBlank()) {
                             Text(" • ${bill.payeeName}", fontSize = 14.sp, color = Color.Gray)
                         }

@@ -129,7 +129,14 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
 
     // Map: Payer -> (Payee -> Amount)
     val netDebts = mutableMapOf<String, MutableMap<String, Double>>()
-    val detailedDebts = mutableMapOf<String, MutableMap<String, MutableList<String>>>()
+    
+    // Structure for detailed copy: PersonId -> (PayeeId -> (RestaurantName -> Details))
+    data class BillDetails(
+        val items: MutableList<String> = mutableListOf(),
+        val offers: MutableList<String> = mutableListOf(),
+        var total: Double = 0.0
+    )
+    val detailedCopyMap = mutableMapOf<String, MutableMap<String, MutableMap<String, BillDetails>>>()
     
     // Track unassigned items: RestaurantName -> List<ItemDescription>
     val unassignedItems = mutableMapOf<String, MutableList<String>>()
@@ -162,11 +169,13 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
                 if (id != payeeId) {
                     tempShares[id] = (tempShares[id] ?: 0.0) + share
                     
-                    val detailMap = detailedDebts.getOrPut(id) { mutableMapOf() }
-                    val billList = detailMap.getOrPut(payeeId) { mutableListOf() }
+                    val pMap = detailedCopyMap.getOrPut(id) { mutableMapOf() }
+                    val payeeMap = pMap.getOrPut(payeeId) { mutableMapOf() }
+                    val bDetails = payeeMap.getOrPut(bill.restaurantName) { BillDetails() }
                     
                     val qtyText = if (personalQuantity % 1.0 == 0.0) personalQuantity.toInt().toString() else String.format(Locale.US, "%.1f", personalQuantity)
-                    billList.add("${bill.restaurantName}: ${item.name} (x$qtyText) ₹${String.format(Locale.US, "%.2f", share)}")
+                    bDetails.items.add("${item.name} (x$qtyText) ₹${String.format(Locale.US, "%.2f", share)}")
+                    bDetails.total += share
                 }
             }
         }
@@ -179,6 +188,7 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
         }
         
         extraPerPerson += bill.miscFees / participatingIds.size
+        extraPerPerson += bill.bookingFees / participatingIds.size
         
         val dinecashShare = bill.dinecashDeduction / participatingIds.size
         val shareBeforeSwiggy = extraPerPerson - dinecashShare
@@ -191,11 +201,13 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
                 
                 tempShares[id] = finalItemShare + finalExtraPerPerson
                 
-                val detailMap = detailedDebts.getOrPut(id) { mutableMapOf() }
-                val billList = detailMap.getOrPut(payeeId) { mutableListOf() }
+                val pMap = detailedCopyMap.getOrPut(id) { mutableMapOf() }
+                val payeeMap = pMap.getOrPut(payeeId) { mutableMapOf() }
+                val bDetails = payeeMap.getOrPut(bill.restaurantName) { BillDetails() }
                 
                 if (finalExtraPerPerson != 0.0) {
-                    billList.add("${bill.restaurantName}: Fees/Tax/Disc/Dinecash ₹${String.format(Locale.US, "%.2f", finalExtraPerPerson)}")
+                    bDetails.offers.add("Fees/Tax/Disc/Dinecash ₹${String.format(Locale.US, "%.2f", finalExtraPerPerson)}")
+                    bDetails.total += finalExtraPerPerson
                 }
             }
         }
@@ -208,11 +220,16 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
         }
     }
 
-    // Simplify debts
-    val simplified = mutableMapOf<String, MutableMap<String, Double>>()
+    // Simplify debts and track deductions
+    data class SimplifiedDebt(
+        val otherId: String,
+        val netAmount: Double, // current person owes otherId if positive, or gets if negative
+        val deduction: Double // amount subtracted due to reverse debt
+    )
+    val simplified = mutableMapOf<String, MutableList<SimplifiedDebt>>()
     val allPersonIds = (netDebts.keys + netDebts.values.flatMap { it.keys }).distinct()
     
-    val personIdList = allPersonIds.toList()
+    val personIdList = allPersonIds.sorted()
     for (i in personIdList.indices) {
         for (j in i + 1 until personIdList.size) {
             val p1 = personIdList[i]
@@ -220,10 +237,15 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
             val p1OwesP2 = netDebts[p1]?.get(p2) ?: 0.0
             val p2OwesP1 = netDebts[p2]?.get(p1) ?: 0.0
             
-            if (p1OwesP2 > p2OwesP1) {
-                simplified.getOrPut(p1) { mutableMapOf() }[p2] = p1OwesP2 - p2OwesP1
-            } else if (p2OwesP1 > p1OwesP2) {
-                simplified.getOrPut(p2) { mutableMapOf() }[p1] = p2OwesP1 - p1OwesP2
+            val net = p1OwesP2 - p2OwesP1
+            val deduction = Math.min(p1OwesP2, p2OwesP1)
+            
+            if (net > 0) {
+                simplified.getOrPut(p1) { mutableListOf() }.add(SimplifiedDebt(p2, net, deduction))
+                simplified.getOrPut(p2) { mutableListOf() }.add(SimplifiedDebt(p1, -net, deduction))
+            } else if (net < 0) {
+                simplified.getOrPut(p2) { mutableListOf() }.add(SimplifiedDebt(p1, -net, deduction))
+                simplified.getOrPut(p1) { mutableListOf() }.add(SimplifiedDebt(p2, net, deduction))
             }
         }
     }
@@ -239,14 +261,40 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
                 }
                 IconButton(onClick = {
                     val summaryText = buildString {
-                        append("*Smart Split Summary*\n\n")
-                        simplified.forEach { (payerId, payees) ->
-                            val payerName = people.find { it.id == payerId }?.name ?: "Unknown"
-                            payees.forEach { (payeeId, amount) ->
-                                val payeeName = people.find { it.id == payeeId }?.name ?: "Unknown"
-                                append("$payerName owes $payeeName: ₹${String.format(Locale.US, "%.2f", amount)}\n")
+                        if (isDetailedView) {
+                            append("*Smart Split Detailed View*\n\n")
+                            detailedCopyMap.forEach { (payerId, payees) ->
+                                val payerName = people.find { it.id == payerId }?.name ?: "Unknown"
+                                append("*$payerName*\n")
+                                payees.forEach { (payeeId, restaurantBills) ->
+                                    val payeeName = people.find { it.id == payeeId }?.name ?: "Unknown"
+                                    append("  Owes $payeeName:\n")
+                                    restaurantBills.forEach { (restName, details) ->
+                                        append("    _${restName}_\n")
+                                        details.items.forEach { append("      • $it\n") }
+                                        details.offers.forEach { append("      • $it\n") }
+                                        append("      *Total:* ₹${String.format(Locale.US, "%.2f", details.total)}\n")
+                                    }
+                                }
+                                append("\n")
+                            }
+                        } else {
+                            append("*Smart Split Summary*\n\n")
+                            simplified.forEach { (p1, others) ->
+                                val name1 = people.find { it.id == p1 }?.name ?: "Unknown"
+                                others.forEach { debt ->
+                                    if (debt.netAmount > 0) {
+                                        val name2 = people.find { it.id == debt.otherId }?.name ?: "Unknown"
+                                        append("$name1 owes $name2: ₹${String.format(Locale.US, "%.2f", debt.netAmount)}")
+                                        if (debt.deduction > 0) {
+                                            append(" (Net after ₹${String.format(Locale.US, "%.2f", debt.deduction)} deduction)")
+                                        }
+                                        append("\n")
+                                    }
+                                }
                             }
                         }
+                        
                         if (unassignedItems.isNotEmpty()) {
                             append("\n*Unassigned Items*\n")
                             unassignedItems.forEach { (bill, items) ->
@@ -257,7 +305,7 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
                     }
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText("Smart Split", summaryText))
-                    Toast.makeText(context, "Summary copied", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
                 }) {
                     Icon(Icons.Default.ContentCopy, null, tint = Color.White)
                 }
@@ -268,36 +316,40 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
                 if (simplified.isEmpty() && unassignedItems.isEmpty()) {
                     item { Text("No outstanding debts!", color = Color.Gray) }
                 } else {
-                    simplified.forEach { (payerId, payees) ->
-                        val payerName = people.find { it.id == payerId }?.name ?: "Unknown"
+                    simplified.forEach { (p1, others) ->
+                        val name1 = people.find { it.id == p1 }?.name ?: "Unknown"
                         item { 
-                            Text(payerName, fontWeight = FontWeight.Bold, color = Color(0xFF1DB954), modifier = Modifier.padding(top = 8.dp))
+                            Text(name1, fontWeight = FontWeight.Bold, color = Color(0xFF1DB954), modifier = Modifier.padding(top = 8.dp))
                         }
-                        items(payees.toList()) { (payeeId, amount) ->
-                            val payeeName = people.find { it.id == payeeId }?.name ?: "Unknown"
+                        items(others) { debt ->
+                            val name2 = people.find { it.id == debt.otherId }?.name ?: "Unknown"
                             Column(modifier = Modifier.padding(start = 16.dp, top = 4.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("owes $payeeName", color = Color.White)
-                                    Text("₹${String.format(Locale.US, "%.2f", amount)}", fontWeight = FontWeight.Bold, color = Color.White)
-                                }
-                                if (isDetailedView) {
-                                    val netP1OwesP2 = netDebts[payerId]?.get(payeeId) ?: 0.0
-                                    val netP2OwesP1 = netDebts[payeeId]?.get(payerId) ?: 0.0
-                                    
-                                    if (netP1OwesP2 > 0) {
-                                        Text("Total $payerName owes $payeeName: ₹${String.format(Locale.US, "%.2f", netP1OwesP2)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.LightGray)
-                                        detailedDebts[payerId]?.get(payeeId)?.forEach { detail ->
-                                            Text("• $detail", fontSize = 11.sp, color = Color.Gray)
+                                    Text(if (debt.netAmount > 0) "owes $name2" else "gets from $name2", color = Color.White)
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        val isNetGetsFromOwing = debt.netAmount < 0 && debt.deduction > 0
+                                        Text(
+                                            "₹${String.format(Locale.US, "%.2f", Math.abs(debt.netAmount))}", 
+                                            fontWeight = FontWeight.Bold, 
+                                            color = if (isNetGetsFromOwing) Color(0xFFCF6679) else Color.White
+                                        )
+                                        if (debt.deduction > 0) {
+                                            Text(
+                                                if (debt.netAmount > 0) "(-₹${String.format(Locale.US, "%.2f", debt.deduction)})"
+                                                else "(after ₹${String.format(Locale.US, "%.2f", debt.deduction)} deduction)",
+                                                fontSize = 10.sp,
+                                                color = if (debt.netAmount < 0) Color(0xFFCF6679) else Color.Gray
+                                            )
                                         }
                                     }
-                                    
-                                    if (netP2OwesP1 > 0) {
+                                }
+                                if (isDetailedView && debt.netAmount > 0) {
+                                    detailedCopyMap[p1]?.get(debt.otherId)?.forEach { (restName, details) ->
                                         Spacer(modifier = Modifier.height(4.dp))
-                                        Text("Subtractions ($payeeName also owes $payerName):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.LightGray)
-                                        detailedDebts[payeeId]?.get(payerId)?.forEach { detail ->
-                                            Text("- $detail", fontSize = 11.sp, color = Color(0xFFCF6679))
-                                        }
-                                        Text("Total reduction: -₹${String.format(Locale.US, "%.2f", netP2OwesP1)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFCF6679))
+                                        Text(restName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.LightGray)
+                                        details.items.forEach { Text("• $it", fontSize = 11.sp, color = Color.Gray) }
+                                        details.offers.forEach { Text("• $it", fontSize = 11.sp, color = Color(0xFF1DB954)) }
+                                        Text("Total: ₹${String.format(Locale.US, "%.2f", details.total)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                     }
                                 }
                             }
@@ -307,7 +359,7 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
                     if (unassignedItems.isNotEmpty()) {
                         item {
                             HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 12.dp))
-                            Text("Unassigned Items", fontWeight = FontWeight.Bold, color = Color(0xFFCF6679))
+                            Text("Unassigned Items", fontWeight = FontWeight.Bold, color = Color.White)
                         }
                         unassignedItems.forEach { (billName, items) ->
                             item {
@@ -389,7 +441,7 @@ fun LogsUI(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableStateOf(0) }
 
     Scaffold(
         topBar = {

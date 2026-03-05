@@ -50,6 +50,7 @@ TL;DR [Jump to Setup](https://github.com/daem0n707/Payman#%EF%B8%8F-setup).
 *   **In-App Calculator:** A handy dark-themed calculator for quick math.
 *   **Detailed Logs:** View AI responses and error logs to troubleshoot any processing issues. **Payman now supports separate logs for general errors and Groq API responses.**
 *   **Usage and Tour Guide:** A built-in guide explaining the nuances of the splitting logic and the app's features.
+*   **Track Extra Spending:** Feature to add miscellaneous spending like cabs inside Bill Categories
 
 ## 🚀 Tech Stack
 

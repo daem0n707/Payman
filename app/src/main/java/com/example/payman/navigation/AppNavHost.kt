@@ -1,7 +1,5 @@
 package com.example.payman.navigation
 
-import android.graphics.Bitmap
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
@@ -192,36 +190,40 @@ fun AppNavHost() {
                 emptySections = emptySections,
                 tourState = tourState,
                 onStartTour = {
-                    val steps = listOf(
-                        TourStep("menu_btn", "Sidebar Menu", "Open the sidebar to access settings, people, and groups.", "home") {
-                            scope.launch { drawerState.open() }
-                        },
-                        TourStep("swiggy_hdfc", "HDFC Card Offer", "Enable this if you have a Swiggy HDFC card to get an extra 10% discount on dineout bills.", "home"),
-                        TourStep("people_sec", "Manage People", "Add and manage people who you frequently share bills with.", "home"),
-                        TourStep("groups_sec", "Manage Groups", "Create groups to quickly add multiple people to a bill at once.", "home") {
-                            scope.launch { drawerState.close() }
-                        },
-                        TourStep("new_section_btn", "Create New Section", "Group your bills into custom categories like 'Trip to Goa' or 'Weekend Brunch'.", "home"),
-                        TourStep("add_bill_to_section", "Add Bill to Category", "Quickly add a new bill directly into this specific section.", "home"),
-                        TourStep("first_bill", "Manage Bills", "Long press and drag a bill to reorder it within a section or move it to another section.", "home") {
-                            if (bills.isNotEmpty()) {
-                                selectedBill = bills.first()
+                    val restaurantBill = bills.find { !it.isManualExpense && !it.isProcessing }
+                    if (restaurantBill != null) {
+                        val steps = listOf(
+                            TourStep("menu_btn", "Sidebar Menu", "Open the sidebar to access settings, people, and groups.", "home") {
+                                scope.launch { drawerState.open() }
+                            },
+                            TourStep("swiggy_hdfc", "HDFC Card Offer", "Enable this if you have a Swiggy HDFC card to get an extra 10% discount on dineout bills.", "home"),
+                            TourStep("people_sec", "Manage People", "Add and manage people who you frequently share bills with.", "home"),
+                            TourStep("groups_sec", "Manage Groups", "Create groups to quickly add multiple people to a bill at once.", "home") {
+                                scope.launch { drawerState.close() }
+                            },
+                            TourStep("new_section_btn", "Create New Section", "Group your bills into custom categories like 'Trip to Goa' or 'Weekend Brunch'.", "home"),
+                            TourStep("add_bill_to_section", "Add Bill to Category", "Quickly add a new bill directly into this specific section.", "home"),
+                            TourStep("first_bill", "Manage Bills", "Long press and drag a bill to reorder it within a section or move it to another section.", "home") {
+                                selectedBill = restaurantBill
                                 currentScreen = "billDetails"
-                            }
-                        },
-                        TourStep("add_people_btn", "Add People to Bill", "Add participants from your people or groups list to this specific bill.", "billDetails"),
-                        TourStep("assign_payee", "Set Payee", "Select who paid the full amount. This person will be owed money by others.", "billDetails"),
-                        TourStep("discount_sec", "Apply Discounts", "Add Dineout discounts and Swiggy Dinecash deductions to reduce individual shares. The app also supports fixed amount discounts instead of a percentage.", "billDetails"),
-                        TourStep("misc_charges", "Misc & Booking Fees", "Add extra charges like Swiggy/Zomato convenience fees and table booking charges to be split.", "billDetails") {
-                            currentScreen = "home"
-                            scope.launch { drawerState.open() }
-                        },
-                        TourStep("recycle_bin_btn", "Recycle Bin", "Deleted bills are held here for 30 days before permanent removal. You can restore them anytime.", "home") {
-                            scope.launch { drawerState.close() }
-                        },
-                        TourStep("smart_split", "Smart Split", "Calculate net transfers between everyone across all bills in this section.", "home")
-                    )
-                    tourState.startTour(steps)
+                            },
+                            TourStep("add_people_btn", "Add People to Bill", "Add participants from your people or groups list to this specific bill.", "billDetails"),
+                            TourStep("assign_payee", "Set Payee", "Select who paid the full amount. This person will be owed money by others.", "billDetails"),
+                            TourStep("discount_sec", "Apply Discounts", "Add Dineout discounts and Swiggy Dinecash deductions to reduce individual shares. The app also supports fixed amount discounts instead of a percentage.", "billDetails"),
+                            TourStep("misc_charges", "Misc & Booking Fees", "Add extra charges like Swiggy/Zomato convenience fees and table booking charges to be split.", "billDetails") {
+                                currentScreen = "home"
+                                scope.launch { drawerState.open() }
+                            },
+                            TourStep("recycle_bin_btn", "Recycle Bin", "Deleted bills are held here for 30 days before permanent removal. You can restore them anytime.", "home") {
+                                scope.launch { drawerState.close() }
+                            },
+                            TourStep("section_menu_General", "Manual Expenses", "You can also add expenses manually without a bill image from the section menu.", "home"),
+                            TourStep("smart_split", "Smart Split", "Calculate net transfers between everyone across all bills in this section.", "home")
+                        )
+                        tourState.startTour(steps)
+                    } else {
+                        Toast.makeText(context, "Please add a restaurant bill first to take the tour", Toast.LENGTH_LONG).show()
+                    }
                 },
                 drawerState = drawerState
             )
@@ -315,7 +317,7 @@ fun AppNavHost() {
                                     groqLogs.addAll(loadGroqLogs(context))
                                 }
                             },
-                            onError = { msg ->
+                            onError = { _ ->
                                 val index = bills.indexOfFirst { it.id == tempBill.id }
                                 if (index != -1) {
                                     bills[index] = tempBill.copy(restaurantName = "Error occured; check logs", isProcessing = false)
