@@ -28,26 +28,28 @@ data class ProcessedBill(
     val timestamp: Long = System.currentTimeMillis(),
     val isManualExpense: Boolean = false
 ) {
+    val dineoutSavings: Double get() {
+        if (!isDiscountApplied) return 0.0
+        return if (isDiscountFixedAmount) {
+            discountAmount
+        } else {
+            val foodItemsSum = items.sumOf { it.totalPrice }
+            (foodItemsSum + tax) * (discountPercentage / 100.0)
+        }
+    }
+
+    val hdfcDiscountValue: Double get() {
+        if (!isSwiggyHdfcApplied) return 0.0
+        val foodItemsSum = items.sumOf { it.totalPrice }
+        val hdfcBase = (foodItemsSum + tax + serviceCharge + miscFees) - bookingFees - dineoutSavings - dinecashDeduction.coerceAtLeast(0.0)
+        return hdfcBase.coerceAtLeast(0.0) * 0.10
+    }
+
     val totalAmount: Double get() {
         if (isManualExpense) return items.sumOf { it.totalPrice }
 
-        val baseAmount = items.sumOf { it.totalPrice } + tax + serviceCharge
-        val discountedAmount = if (isDiscountApplied) {
-            if (isDiscountFixedAmount) {
-                baseAmount - discountAmount
-            } else {
-                baseAmount * (1 - discountPercentage / 100.0)
-            }
-        } else baseAmount
-        
-        val afterMisc = discountedAmount + miscFees + bookingFees
-        // Dinecash is subtracted BEFORE applying the 10% offer
-        val beforeSwiggy = afterMisc - dinecashDeduction.coerceAtLeast(0.0)
-
-        return if (isSwiggyHdfcApplied) {
-            beforeSwiggy * 0.90
-        } else {
-            beforeSwiggy
-        }
+        val foodItemsSum = items.sumOf { it.totalPrice }
+        val totalBeforeHdfc = (foodItemsSum + tax + serviceCharge + miscFees + bookingFees) - dineoutSavings - dinecashDeduction.coerceAtLeast(0.0)
+        return totalBeforeHdfc - hdfcDiscountValue
     }
 }

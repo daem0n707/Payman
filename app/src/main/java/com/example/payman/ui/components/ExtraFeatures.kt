@@ -4,7 +4,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,14 +20,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.payman.data.local.LogEntry
 import com.example.payman.data.model.Person
 import com.example.payman.data.model.ProcessedBill
+import com.example.payman.ui.billdetails.SplitCalculator
+import com.example.payman.ui.billdetails.SplitMethod
 import com.example.payman.ui.home.BillRow
 import java.text.SimpleDateFormat
 import java.util.*
@@ -126,6 +134,8 @@ fun CalculatorDialog(onDismiss: () -> Unit) {
 fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var isDetailedView by remember { mutableStateOf(false) }
+    var currentMethod by remember { mutableStateOf(SplitMethod.EQUAL) }
+    var showMethods by remember { mutableStateOf(false) }
 
     // Map: Payer -> (Payee -> Amount)
     val netDebts = mutableMapOf<String, MutableMap<String, Double>>()
@@ -137,8 +147,6 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
         var total: Double = 0.0
     )
     val detailedCopyMap = mutableMapOf<String, MutableMap<String, MutableMap<String, BillDetails>>>()
-    
-    // Track unassigned items: RestaurantName -> List<ItemDescription>
     val unassignedItems = mutableMapOf<String, MutableList<String>>()
 
     bills.forEach { bill ->
@@ -146,100 +154,66 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
         val participatingIds = bill.participatingPersonIds
         if (participatingIds.isEmpty()) return@forEach
 
-        val discountMultiplier = if (bill.isDiscountApplied && !bill.isDiscountFixedAmount) (1 - bill.discountPercentage / 100.0) else 1.0
-        
-        // Calculate shares for this specific bill
-        val tempShares = mutableMapOf<String, Double>()
+        val foodShares = mutableMapOf<String, Double>()
         bill.items.forEach { item ->
-            val itemAssignedIds = item.assignedPersonIds.filter { participatingIds.contains(it) }
-            
-            if (itemAssignedIds.isEmpty()) {
-                // Unassigned item
-                val list = unassignedItems.getOrPut(bill.restaurantName) { mutableListOf() }
+            val assigned = item.assignedPersonIds.filter { participatingIds.contains(it) }
+            if (assigned.isNotEmpty()) {
+                val share = (item.unitPrice * item.quantity) / assigned.size
+                assigned.forEach { id -> foodShares[id] = (foodShares[id] ?: 0.0) + share }
+            } else {
                 val qtyText = if (item.quantity.toDouble() % 1.0 == 0.0) item.quantity.toInt().toString() else String.format(Locale.US, "%.1f", item.quantity.toDouble())
-                list.add("${item.name} (x$qtyText) ₹${String.format(Locale.US, "%.2f", item.totalPrice)}")
-                return@forEach
-            }
-            
-            val splitAmong = itemAssignedIds
-            val personalQuantity = item.quantity.toDouble() / splitAmong.size
-            val share = (item.unitPrice * personalQuantity * discountMultiplier)
-            
-            splitAmong.forEach { id -> 
-                if (id != payeeId) {
-                    tempShares[id] = (tempShares[id] ?: 0.0) + share
-                    
-                    val pMap = detailedCopyMap.getOrPut(id) { mutableMapOf() }
-                    val payeeMap = pMap.getOrPut(payeeId) { mutableMapOf() }
-                    val bDetails = payeeMap.getOrPut(bill.restaurantName) { BillDetails() }
-                    
-                    val qtyText = if (personalQuantity % 1.0 == 0.0) personalQuantity.toInt().toString() else String.format(Locale.US, "%.1f", personalQuantity)
-                    bDetails.items.add("${item.name} (x$qtyText) ₹${String.format(Locale.US, "%.2f", share)}")
-                    bDetails.total += share
-                }
+                unassignedItems.getOrPut(bill.restaurantName) { mutableListOf() }.add("${item.name} (x$qtyText) ₹${String.format(Locale.US, "%.2f", item.totalPrice)}")
             }
         }
-        
-        val baseExtraFees = bill.tax + bill.serviceCharge
-        var extraPerPerson = (baseExtraFees * discountMultiplier) / participatingIds.size
-        
-        if (bill.isDiscountApplied && bill.isDiscountFixedAmount) {
-            extraPerPerson -= bill.discountAmount / participatingIds.size
-        }
-        
-        extraPerPerson += bill.miscFees / participatingIds.size
-        extraPerPerson += bill.bookingFees / participatingIds.size
-        
-        val dinecashShare = bill.dinecashDeduction / participatingIds.size
-        val shareBeforeSwiggy = extraPerPerson - dinecashShare
-        val finalExtraPerPerson = if (bill.isSwiggyHdfcApplied) shareBeforeSwiggy * 0.90 else shareBeforeSwiggy
 
-        participatingIds.forEach { id -> 
+        val totalMisc = bill.miscFees + bill.bookingFees
+        val miscShares = SplitCalculator.calculateMiscShares(foodShares, totalMisc, currentMethod, participatingIds.size)
+        val hdfcDiscountShares = SplitCalculator.calculateMiscShares(foodShares, bill.hdfcDiscountValue, currentMethod, participatingIds.size)
+
+        participatingIds.forEach { id ->
             if (id != payeeId) {
-                val itemShareInThisBill = (tempShares[id] ?: 0.0)
-                val finalItemShare = if (bill.isSwiggyHdfcApplied) itemShareInThisBill * 0.90 else itemShareInThisBill
+                val foodShare = foodShares[id] ?: 0.0
+                val taxService = (bill.tax + bill.serviceCharge) / participatingIds.size
+                val miscShare = miscShares[id] ?: 0.0
+                val hdfcSaving = hdfcDiscountShares[id] ?: 0.0
+                val dineoutSaving = if (bill.isDiscountApplied) {
+                    if (bill.isDiscountFixedAmount) bill.discountAmount / participatingIds.size
+                    else (foodShare + (bill.tax / participatingIds.size)) * (bill.discountPercentage / 100.0)
+                } else 0.0
+                val dinecash = bill.dinecashDeduction / participatingIds.size
+
+                val netForBill = foodShare + taxService + miscShare - dineoutSaving - dinecash - hdfcSaving
                 
-                tempShares[id] = finalItemShare + finalExtraPerPerson
-                
+                val payerMap = netDebts.getOrPut(id) { mutableMapOf() }
+                payerMap[payeeId] = (payerMap[payeeId] ?: 0.0) + netForBill
+
                 val pMap = detailedCopyMap.getOrPut(id) { mutableMapOf() }
                 val payeeMap = pMap.getOrPut(payeeId) { mutableMapOf() }
                 val bDetails = payeeMap.getOrPut(bill.restaurantName) { BillDetails() }
                 
-                if (finalExtraPerPerson != 0.0) {
-                    bDetails.offers.add("Fees/Tax/Disc/Dinecash ₹${String.format(Locale.US, "%.2f", finalExtraPerPerson)}")
-                    bDetails.total += finalExtraPerPerson
-                }
-            }
-        }
-
-        tempShares.forEach { (payerId, amount) ->
-            if (payerId != payeeId) {
-                val payerMap = netDebts.getOrPut(payerId) { mutableMapOf() }
-                payerMap[payeeId] = (payerMap[payeeId] ?: 0.0) + amount
+                bDetails.total += netForBill
+                if (foodShare > 0) bDetails.items.add("Food consumption: ₹${String.format(Locale.US, "%.2f", foodShare)}")
+                if (taxService > 0) bDetails.offers.add("Tax & Service: ₹${String.format(Locale.US, "%.2f", taxService)}")
+                if (miscShare > 0) bDetails.offers.add("Misc & Booking: ₹${String.format(Locale.US, "%.2f", miscShare)}")
+                if (dineoutSaving > 0) bDetails.offers.add("Dineout Savings: -₹${String.format(Locale.US, "%.2f", dineoutSaving)}")
+                if (dinecash > 0) bDetails.offers.add("Dinecash: -₹${String.format(Locale.US, "%.2f", dinecash)}")
+                if (hdfcSaving > 0) bDetails.offers.add("Swiggy HDFC: -₹${String.format(Locale.US, "%.2f", hdfcSaving)}")
             }
         }
     }
 
-    // Simplify debts and track deductions
-    data class SimplifiedDebt(
-        val otherId: String,
-        val netAmount: Double, // current person owes otherId if positive, or gets if negative
-        val deduction: Double // amount subtracted due to reverse debt
-    )
+    data class SimplifiedDebt(val otherId: String, val netAmount: Double, val deduction: Double)
     val simplified = mutableMapOf<String, MutableList<SimplifiedDebt>>()
-    val allPersonIds = (netDebts.keys + netDebts.values.flatMap { it.keys }).distinct()
+    val allIds = (netDebts.keys + netDebts.values.flatMap { it.keys }).distinct().sorted()
     
-    val personIdList = allPersonIds.sorted()
-    for (i in personIdList.indices) {
-        for (j in i + 1 until personIdList.size) {
-            val p1 = personIdList[i]
-            val p2 = personIdList[j]
+    for (i in allIds.indices) {
+        for (j in i + 1 until allIds.size) {
+            val p1 = allIds[i]
+            val p2 = allIds[j]
             val p1OwesP2 = netDebts[p1]?.get(p2) ?: 0.0
             val p2OwesP1 = netDebts[p2]?.get(p1) ?: 0.0
-            
             val net = p1OwesP2 - p2OwesP1
             val deduction = Math.min(p1OwesP2, p2OwesP1)
-            
             if (net > 0) {
                 simplified.getOrPut(p1) { mutableListOf() }.add(SimplifiedDebt(p2, net, deduction))
                 simplified.getOrPut(p2) { mutableListOf() }.add(SimplifiedDebt(p1, -net, deduction))
@@ -255,118 +229,67 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
         containerColor = Color(0xFF36454F),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Smart Split", color = Color.White, modifier = Modifier.weight(1f))
-                IconButton(onClick = { isDetailedView = !isDetailedView }) {
-                    Icon(if (isDetailedView) Icons.Default.Description else Icons.AutoMirrored.Filled.List, null, tint = Color.White)
-                }
-                IconButton(onClick = {
-                    val summaryText = buildString {
-                        if (isDetailedView) {
-                            append("*Smart Split Detailed View*\n\n")
-                            detailedCopyMap.forEach { (payerId, payees) ->
-                                val payerName = people.find { it.id == payerId }?.name ?: "Unknown"
-                                append("*$payerName*\n")
-                                payees.forEach { (payeeId, restaurantBills) ->
-                                    val payeeName = people.find { it.id == payeeId }?.name ?: "Unknown"
-                                    append("  Owes $payeeName:\n")
-                                    restaurantBills.forEach { (restName, details) ->
-                                        append("    _${restName}_\n")
-                                        details.items.forEach { append("      • $it\n") }
-                                        details.offers.forEach { append("      • $it\n") }
-                                        append("      *Total:* ₹${String.format(Locale.US, "%.2f", details.total)}\n")
-                                    }
-                                }
-                                append("\n")
-                            }
-                        } else {
-                            append("*Smart Split Summary*\n\n")
-                            simplified.forEach { (p1, others) ->
-                                val name1 = people.find { it.id == p1 }?.name ?: "Unknown"
-                                others.forEach { debt ->
-                                    if (debt.netAmount > 0) {
-                                        val name2 = people.find { it.id == debt.otherId }?.name ?: "Unknown"
-                                        append("$name1 owes $name2: ₹${String.format(Locale.US, "%.2f", debt.netAmount)}")
-                                        if (debt.deduction > 0) {
-                                            append(" (Net after ₹${String.format(Locale.US, "%.2f", debt.deduction)} deduction)")
-                                        }
-                                        append("\n")
-                                    }
-                                }
-                            }
-                        }
-                        
-                        if (unassignedItems.isNotEmpty()) {
-                            append("\n*Unassigned Items*\n")
-                            unassignedItems.forEach { (bill, items) ->
-                                append("$bill:\n")
-                                items.forEach { append("  - $it\n") }
-                            }
-                        }
+                Text(if (showMethods) "Split Methods" else "Smart Split", color = Color.White, modifier = Modifier.weight(1f))
+                if (!showMethods) {
+                    IconButton(onClick = { isDetailedView = !isDetailedView }) {
+                        Icon(if (isDetailedView) Icons.Default.Description else Icons.AutoMirrored.Filled.List, null, tint = Color.White)
                     }
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("Smart Split", summaryText))
-                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
-                }) {
-                    Icon(Icons.Default.ContentCopy, null, tint = Color.White)
+                    IconButton(onClick = { showMethods = true }) { Icon(Icons.Default.Settings, null, tint = Color.White) }
+                } else {
+                    IconButton(onClick = { showMethods = false }) { Icon(Icons.Default.Close, null, tint = Color.White) }
                 }
             }
         },
         text = {
-            LazyColumn {
-                if (simplified.isEmpty() && unassignedItems.isEmpty()) {
-                    item { Text("No outstanding debts!", color = Color.Gray) }
-                } else {
-                    simplified.forEach { (p1, others) ->
-                        val name1 = people.find { it.id == p1 }?.name ?: "Unknown"
-                        item { 
-                            Text(name1, fontWeight = FontWeight.Bold, color = Color(0xFF1DB954), modifier = Modifier.padding(top = 8.dp))
-                        }
-                        items(others) { debt ->
-                            val name2 = people.find { it.id == debt.otherId }?.name ?: "Unknown"
-                            Column(modifier = Modifier.padding(start = 16.dp, top = 4.dp)) {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(if (debt.netAmount > 0) "owes $name2" else "gets from $name2", color = Color.White)
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        val isNetGetsFromOwing = debt.netAmount < 0 && debt.deduction > 0
-                                        Text(
-                                            "₹${String.format(Locale.US, "%.2f", Math.abs(debt.netAmount))}", 
-                                            fontWeight = FontWeight.Bold, 
-                                            color = if (isNetGetsFromOwing) Color(0xFFCF6679) else Color.White
-                                        )
-                                        if (debt.deduction > 0) {
-                                            Text(
-                                                if (debt.netAmount > 0) "(-₹${String.format(Locale.US, "%.2f", debt.deduction)})"
-                                                else "(after ₹${String.format(Locale.US, "%.2f", debt.deduction)} deduction)",
-                                                fontSize = 10.sp,
-                                                color = if (debt.netAmount < 0) Color(0xFFCF6679) else Color.Gray
-                                            )
+            if (showMethods) {
+                Column {
+                    SplitMethodCard("Equal Split", "Shared costs divided equally", currentMethod == SplitMethod.EQUAL) { currentMethod = SplitMethod.EQUAL }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SplitMethodCard("Economically Fair", "Proportional to food consumed", currentMethod == SplitMethod.PROPORTIONAL) { currentMethod = SplitMethod.PROPORTIONAL }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SplitMethodCard("Balanced", "50% Equal, 50% Proportional", currentMethod == SplitMethod.HYBRID) { currentMethod = SplitMethod.HYBRID }
+                }
+            } else {
+                LazyColumn {
+                    if (simplified.isEmpty() && unassignedItems.isEmpty()) {
+                        item { Text("No outstanding debts!", color = Color.Gray) }
+                    } else {
+                        simplified.forEach { (p1, others) ->
+                            val name1 = people.find { it.id == p1 }?.name ?: "Unknown"
+                            item { Text(name1, fontWeight = FontWeight.Bold, color = Color(0xFF1DB954), modifier = Modifier.padding(top = 8.dp)) }
+                            items(others) { debt ->
+                                val name2 = people.find { it.id == debt.otherId }?.name ?: "Unknown"
+                                Column(modifier = Modifier.padding(start = 16.dp, top = 4.dp)) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(if (debt.netAmount > 0) "owes $name2" else "gets from $name2", color = Color.White)
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            val isNetGetsFromOwing = debt.netAmount < 0 && debt.deduction > 0
+                                            Text("₹${String.format(Locale.US, "%.2f", Math.abs(debt.netAmount))}", fontWeight = FontWeight.Bold, color = if (isNetGetsFromOwing) Color(0xFFCF6679) else Color.White)
+                                            if (debt.deduction > 0) {
+                                                Text(if (debt.netAmount > 0) "(-₹${String.format(Locale.US, "%.2f", debt.deduction)})" else "(after ₹${String.format(Locale.US, "%.2f", debt.deduction)} deduction)", fontSize = 10.sp, color = if (debt.netAmount < 0) Color(0xFFCF6679) else Color.Gray)
+                                            }
+                                        }
+                                    }
+                                    if (isDetailedView && debt.netAmount > 0) {
+                                        detailedCopyMap[p1]?.get(debt.otherId)?.forEach { (restName, details) ->
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(restName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.LightGray)
+                                            details.items.forEach { Text("• $it", fontSize = 11.sp, color = Color.Gray) }
+                                            details.offers.forEach { Text("• $it", fontSize = 11.sp, color = Color(0xFF1DB954)) }
+                                            Text("Subtotal: ₹${String.format(Locale.US, "%.2f", details.total)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         }
                                     }
                                 }
-                                if (isDetailedView && debt.netAmount > 0) {
-                                    detailedCopyMap[p1]?.get(debt.otherId)?.forEach { (restName, details) ->
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(restName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.LightGray)
-                                        details.items.forEach { Text("• $it", fontSize = 11.sp, color = Color.Gray) }
-                                        details.offers.forEach { Text("• $it", fontSize = 11.sp, color = Color(0xFF1DB954)) }
-                                        Text("Total: ₹${String.format(Locale.US, "%.2f", details.total)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                    }
-                                }
                             }
                         }
-                    }
-                    
-                    if (unassignedItems.isNotEmpty()) {
-                        item {
-                            HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 12.dp))
-                            Text("Unassigned Items", fontWeight = FontWeight.Bold, color = Color.White)
-                        }
-                        unassignedItems.forEach { (billName, items) ->
+                        if (unassignedItems.isNotEmpty()) {
                             item {
-                                Text(billName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.LightGray, modifier = Modifier.padding(top = 8.dp))
+                                HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 12.dp))
+                                Text("Unassigned Items", fontWeight = FontWeight.Bold, color = Color.White)
                             }
-                            items(items) { detail ->
-                                Text("• $detail", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(start = 8.dp))
+                            unassignedItems.forEach { (billName, items) ->
+                                item { Text(billName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.LightGray, modifier = Modifier.padding(top = 8.dp)) }
+                                items(items) { detail -> Text("• $detail", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(start = 8.dp)) }
                             }
                         }
                     }
@@ -375,6 +298,23 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
         },
         confirmButton = { Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DB954))) { Text("Close", color = Color.Black) } }
     )
+}
+
+@Composable
+fun SplitMethodCard(title: String, subtitle: String, isSelected: Boolean, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFF1DB954).copy(alpha = 0.2f) else Color(0xFF2B373E)),
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1DB954)) else null
+    ) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = Color.White, fontWeight = FontWeight.Bold)
+                Text(subtitle, color = Color.Gray, fontSize = 12.sp)
+            }
+            RadioButton(selected = isSelected, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF1DB954)))
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

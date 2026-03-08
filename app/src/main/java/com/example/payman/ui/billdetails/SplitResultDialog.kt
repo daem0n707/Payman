@@ -205,8 +205,13 @@ fun SplitSummaryContent(
         SplitCalculator.calculateMiscShares(foodShares, totalMisc, currentMethod, participatingPeople.size)
     }
 
+    val totalHdfcDiscount = bill.hdfcDiscountValue
+    val hdfcDiscountShares = remember(foodShares, totalHdfcDiscount, currentMethod, participatingPeople) {
+        SplitCalculator.calculateMiscShares(foodShares, totalHdfcDiscount, currentMethod, participatingPeople.size)
+    }
+
     // Comprehensive final share calculation
-    val finalResults = remember(foodShares, miscShares, bill, participatingPeople) {
+    val finalResults = remember(foodShares, miscShares, hdfcDiscountShares, bill, participatingPeople) {
         participatingPeople.associate { person ->
             val foodShare = foodShares[person.id] ?: 0.0
             val taxService = (bill.tax + bill.serviceCharge) / participatingPeople.size
@@ -218,24 +223,25 @@ fun SplitSummaryContent(
                 if (bill.isDiscountFixedAmount) {
                     bill.discountAmount / participatingPeople.size
                 } else {
-                    (foodShare + taxService) * (bill.discountPercentage / 100.0)
+                    (foodShare + (bill.tax / participatingPeople.size)) * (bill.discountPercentage / 100.0)
                 }
             } else 0.0
             
             val dinecash = bill.dinecashDeduction / participatingPeople.size
             
             val shareBeforeSwiggy = baseShare - discount - dinecash
-            val swiggySaving = if (bill.isSwiggyHdfcApplied) shareBeforeSwiggy * 0.10 else 0.0
+            val swiggySaving = hdfcDiscountShares[person.id] ?: 0.0
             
             person.id to object {
                 val finalShare = shareBeforeSwiggy - swiggySaving
-                val savings = discount + swiggySaving + dinecash
+                val totalPersonSavings = discount + swiggySaving + dinecash
+                val swiggyHdfcSaving = swiggySaving
                 val breakdown = mutableListOf<String>().apply {
                     if (taxService > 0) add("Tax & Service: ₹${String.format(Locale.US, "%.2f", taxService)}")
                     if (miscShare > 0) add("Misc & Booking: ₹${String.format(Locale.US, "%.2f", miscShare)}")
-                    if (discount > 0) add("Discount Applied (On Food+Tax): -₹${String.format(Locale.US, "%.2f", discount)}")
+                    if (discount > 0) add("Discount Applied: -₹${String.format(Locale.US, "%.2f", discount)}")
                     if (dinecash > 0) add("Dinecash: -₹${String.format(Locale.US, "%.2f", dinecash)}")
-                    if (swiggySaving > 0) add("Swiggy HDFC: -₹${String.format(Locale.US, "%.2f", swiggySaving)}")
+                    if (swiggySaving > 0) add("Swiggy HDFC Card (10%): -₹${String.format(Locale.US, "%.2f", swiggySaving)}")
                 }
             }
         }
@@ -294,7 +300,7 @@ fun SplitSummaryContent(
                             SplitMethod.HYBRID -> "_Balanced_"
                             else -> ""
                         }
-                        append("\n\nNote: A special split method ($methodTitle) was used for Misc Fees to ensure fairness based on food consumption. Tax isn't adjusted this way because Dineout/Swiggy offers apply to Tax but not to Misc Fees.")
+                        append("\n\nNote: A special split method ($methodTitle) was used for Misc Fees and Swiggy HDFC discount to ensure fairness based on food consumption.")
                     }
                 }
                 clipboard.setPrimaryClip(ClipData.newPlainText("Split Summary", text))
@@ -359,7 +365,7 @@ fun SplitSummaryContent(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "Note: A special split method ($methodTitle) was used for Misc Fees to ensure fairness based on food consumption. Tax isn't adjusted because Dineout/Swiggy offers apply to Tax but not to Misc Fees.",
+                        "Note: A special split method ($methodTitle) was used for Misc Fees and Swiggy HDFC discount to ensure fairness based on food consumption.",
                         color = Color.Gray,
                         fontSize = 11.sp,
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
@@ -558,7 +564,7 @@ fun MethodCard(
                     content()
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
-                        onClick = onApply,
+                        onClick = { onApply() },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color.Gray else Color(0xFF1DB954))
                     ) {

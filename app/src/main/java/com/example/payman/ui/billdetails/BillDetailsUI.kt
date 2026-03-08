@@ -260,7 +260,7 @@ fun BillDetailsUI(
                 val discountVal = if (currentBill.isDiscountFixedAmount) {
                     currentBill.discountAmount
                 } else {
-                    (currentBill.items.sumOf { it.totalPrice } + currentBill.tax + currentBill.serviceCharge) * (currentBill.discountPercentage / 100.0)
+                    (currentBill.items.sumOf { it.totalPrice } + currentBill.tax) * (currentBill.discountPercentage / 100.0)
                 }
                 DetailRow(discountLabel, "-₹${String.format(Locale.US, "%.2f", discountVal)}")
             }
@@ -270,12 +270,15 @@ fun BillDetailsUI(
             }
 
             if (currentBill.isSwiggyHdfcApplied) {
-                val base = currentBill.items.sumOf { it.totalPrice } + currentBill.tax + currentBill.serviceCharge
-                val discounted = if (currentBill.isDiscountApplied) {
-                    if (currentBill.isDiscountFixedAmount) base - currentBill.discountAmount else base * (1 - currentBill.discountPercentage / 100.0)
-                } else base
-                val swiggyAmount = (discounted + currentBill.miscFees + currentBill.bookingFees - currentBill.dinecashDeduction) * 0.10
-                DetailRow("Swiggy HDFC Card (10%)", "-₹${String.format(Locale.US, "%.2f", swiggyAmount)}")
+                val foodItemsSum = currentBill.items.sumOf { it.totalPrice }
+                val dineoutSavings = if (currentBill.isDiscountApplied) {
+                    if (currentBill.isDiscountFixedAmount) currentBill.discountAmount else (foodItemsSum + currentBill.tax) * (currentBill.discountPercentage / 100.0)
+                } else 0.0
+                
+                // HDFC 10% is applied on (food + tax + service charge + miscFees) - booking fee - dineout savings - dinecash
+                val hdfcBase = (foodItemsSum + currentBill.tax + currentBill.serviceCharge + currentBill.miscFees) - currentBill.bookingFees - dineoutSavings - currentBill.dinecashDeduction.coerceAtLeast(0.0)
+                val hdfcAmount = hdfcBase.coerceAtLeast(0.0) * 0.10
+                DetailRow("Swiggy HDFC Card (10%)", "-₹${String.format(Locale.US, "%.2f", hdfcAmount)}")
             }
         }
     }
@@ -551,11 +554,15 @@ fun BillItemRow(item: BillItem, people: List<Person>, onEdit: (BillItem) -> Unit
                 Text("${String.format(Locale.US, "%.0f", item.unitPrice)} ", color = Color.Gray, fontSize = 14.sp)
                 if (item.assignedPersonIds.isNotEmpty()) {
                     val counts = item.assignedPersonIds.groupingBy { it }.eachCount()
-                    val assignedText = counts.entries.joinToString { (id, count) ->
-                        val name = people.find { it.id == id }?.name ?: "Unknown"
-                        if (count > 1) "$name (x$count)" else name
+                    val assignedText = counts.entries.mapNotNull { (id, count) ->
+                        val name = people.find { it.id == id }?.name
+                        if (name == null) null
+                        else if (count > 1) "$name (x$count)" else name
+                    }.joinToString(", ")
+
+                    if (assignedText.isNotBlank()) {
+                        Text("• $assignedText", color = Color(0xFF1DB954), fontSize = 12.sp)
                     }
-                    Text("• $assignedText", color = Color(0xFF1DB954), fontSize = 12.sp)
                 }
             }
         }

@@ -232,7 +232,20 @@ fun AppNavHost() {
                 onRestore = { bill ->
                     val keyToRemove = deletedBills.filterValues { it.id == bill.id }.keys.firstOrNull()
                     keyToRemove?.let { deletedBills.remove(it) }
-                    bills.add(0, bill)
+                    
+                    // Sanitize assigned people - remove those who no longer exist
+                    val validPersonIds = people.map { it.id }
+                    val sanitizedItems = bill.items.map { item ->
+                        item.copy(assignedPersonIds = item.assignedPersonIds.filter { validPersonIds.contains(it) })
+                    }.toMutableList()
+                    val sanitizedBill = bill.copy(
+                        items = sanitizedItems,
+                        participatingPersonIds = bill.participatingPersonIds.filter { validPersonIds.contains(it) },
+                        payeeId = if (validPersonIds.contains(bill.payeeId)) bill.payeeId else null,
+                        payeeName = if (validPersonIds.contains(bill.payeeId)) bill.payeeName else ""
+                    )
+                    
+                    bills.add(0, sanitizedBill)
                     saveBills(context, bills)
                     saveDeletedBills(context, deletedBills)
                     currentScreen = "home"
