@@ -192,7 +192,7 @@ fun SmartSplitDialog(bills: List<ProcessedBill>, people: List<Person>, onDismiss
                 val bDetails = payeeMap.getOrPut(bill.restaurantName) { BillDetails() }
                 
                 bDetails.total += netForBill
-                if (foodShare > 0) bDetails.items.add("Food consumption: ₹${String.format(Locale.US, "%.2f", foodShare)}")
+                if (foodShare > 0) bDetails.items.add("Total Spending: ₹${String.format(Locale.US, "%.2f", foodShare)}")
                 if (taxService > 0) bDetails.offers.add("Tax & Service: ₹${String.format(Locale.US, "%.2f", taxService)}")
                 if (miscShare > 0) bDetails.offers.add("Misc & Booking: ₹${String.format(Locale.US, "%.2f", miscShare)}")
                 if (dineoutSaving > 0) bDetails.offers.add("Dineout Savings: -₹${String.format(Locale.US, "%.2f", dineoutSaving)}")
@@ -334,7 +334,8 @@ fun RecycleBinUI(
                     IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
-                    if (deletedBills.isNotEmpty()) {
+                    val hasBills = deletedBills.isNotEmpty()
+                    if (hasBills) {
                         IconButton(onClick = onEmptyBin) { Icon(Icons.Default.Delete, contentDescription = "Empty Bin", tint = Color(0xFFCF6679)) }
                     }
                 },

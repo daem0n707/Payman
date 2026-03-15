@@ -1,5 +1,6 @@
 package com.example.payman.ui.home
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -545,6 +546,7 @@ fun ManualExpenseDialog(
     var selectedPayeeId by remember { mutableStateOf<String?>(null) }
     val participatingIds = remember { mutableStateListOf<String>() }
     var showPayeeDropdown by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -620,7 +622,11 @@ fun ManualExpenseDialog(
             Button(
                 onClick = {
                     val amount = amountStr.toDoubleOrNull() ?: 0.0
-                    if (expenseName.isNotBlank() && amount > 0 && selectedPayeeId != null && participatingIds.isNotEmpty()) {
+                    if (selectedPayeeId == null) {
+                        Toast.makeText(context, "Please select a payer", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    if (expenseName.isNotBlank() && amount > 0 && participatingIds.isNotEmpty()) {
                         val payee = people.find { it.id == selectedPayeeId }
                         val item = BillItem(
                             name = expenseName,
